@@ -18,21 +18,19 @@ if (!defined('ABSPATH')) {
         <div class="tgs-panel">
             <div class="tgs-panel-header">
                 <h2><?php esc_html_e('Cấu hình Shop Cha (Parent Shops)', 'tgs-sync-roll-up'); ?></h2>
-                <?php if (empty($parent_blog_id)): ?>
-                <div class="tgs-panel-actions">
-                    <span id="tgs-save-parent-message" class="tgs-message"></span>
-                    <span class="spinner" id="tgs-parent-spinner"></span>
-                    <button type="submit" class="button button-primary" id="tgs-save-parent-btn">
-                        <span class="dashicons dashicons-admin-multisite" style="line-height: 1.4;"></span>
-                        <?php esc_html_e('Lưu Shop Cha', 'tgs-sync-roll-up'); ?>
-                    </button>
-                </div>
-                <?php endif; ?>
             </div>
 
             <p class="description" style="margin-top: 0;">
                 <?php esc_html_e('Chọn shop cha để đồng bộ dữ liệu roll_up. Shop cha sẽ nhận dữ liệu tổng hợp từ shop này.', 'tgs-sync-roll-up'); ?>
             </p>
+
+            <?php
+            // Lấy trạng thái approval
+            $approval_status = $config->approval_status ?? null;
+            $is_pending = ($approval_status === 'pending');
+            $is_approved = ($approval_status === 'approved');
+            $has_parent_and_approved = (!empty($parent_blog_id) && $is_approved);
+            ?>
 
             <table class="form-table">
                 <tr>
@@ -41,23 +39,53 @@ if (!defined('ABSPATH')) {
                     </th>
                     <td>
                         <?php if (!empty($all_blogs)): ?>
-                            <select name="parent_blog_id" id="parent_blog_id" class="tgs-select2" style="width: 100%; max-width: 400px;" <?php disabled(!empty($parent_blog_id)); ?>>
-                                <option value=""><?php esc_html_e('-- Không có shop cha --', 'tgs-sync-roll-up'); ?></option>
-                                <?php foreach ($all_blogs as $blog): ?>
-                                    <?php if ($blog->blog_id != $blog_id): // Không cho chọn chính mình ?>
-                                        <option value="<?php echo esc_attr($blog->blog_id); ?>"
-                                                <?php selected($parent_blog_id ?? 0, $blog->blog_id); ?>>
-                                            <?php echo esc_html(TGS_Admin_Page::get_blog_name($blog->blog_id)); ?>
-                                            (ID: <?php echo esc_html($blog->blog_id); ?>)
-                                        </option>
-                                    <?php endif; ?>
-                                <?php endforeach; ?>
-                            </select>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <select name="parent_blog_id" id="parent_blog_id" class="tgs-select2" style="width: 100%; max-width: 400px;" <?php disabled($is_pending || $has_parent_and_approved); ?>>
+                                    <option value=""><?php esc_html_e('-- Không có shop cha --', 'tgs-sync-roll-up'); ?></option>
+                                    <?php foreach ($all_blogs as $blog): ?>
+                                        <?php if ($blog->blog_id != $blog_id): // Không cho chọn chính mình ?>
+                                            <option value="<?php echo esc_attr($blog->blog_id); ?>"
+                                                    <?php selected($parent_blog_id ?? 0, $blog->blog_id); ?>>
+                                                <?php echo esc_html(TGS_Admin_Page::get_blog_name($blog->blog_id)); ?>
+                                                (ID: <?php echo esc_html($blog->blog_id); ?>)
+                                            </option>
+                                        <?php endif; ?>
+                                    <?php endforeach; ?>
+                                </select>
 
-                            <?php if (!empty($parent_blog_id)): ?>
-                                <p class="description" style="color: #856404; margin-top: 8px;">
-                                    <span class="dashicons dashicons-lock" style="vertical-align: middle;"></span>
-                                    <?php esc_html_e('Shop cha đã được cấu hình và không thể thay đổi.', 'tgs-sync-roll-up'); ?>
+                                <?php if ($has_parent_and_approved): ?>
+                                    <!-- Đã có cha và đã approved: không hiển thị nút -->
+                                    <p class="description" style="color: #856404; margin: 0;">
+                                        <span class="dashicons dashicons-lock" style="vertical-align: middle;"></span>
+                                        <?php esc_html_e('Shop cha đã được cấu hình và không thể thay đổi.', 'tgs-sync-roll-up'); ?>
+                                    </p>
+                                <?php elseif ($is_pending): ?>
+                                    <!-- Đang pending: hiển thị nút Hủy Yêu Cầu màu đỏ -->
+                                    <div class="tgs-parent-actions">
+                                        <span id="tgs-save-parent-message" class="tgs-message"></span>
+                                        <span class="spinner" id="tgs-parent-spinner"></span>
+                                        <button type="button" class="button button-danger" id="tgs-cancel-parent-btn">
+                                            <span class="dashicons dashicons-no" style="line-height: 1.4;"></span>
+                                            <?php esc_html_e('Hủy Yêu Cầu', 'tgs-sync-roll-up'); ?>
+                                        </button>
+                                    </div>
+                                <?php else: ?>
+                                    <!-- Chưa có cha hoặc chưa pending: hiển thị nút Yêu Cầu -->
+                                    <div class="tgs-parent-actions">
+                                        <span id="tgs-save-parent-message" class="tgs-message"></span>
+                                        <span class="spinner" id="tgs-parent-spinner"></span>
+                                        <button type="submit" class="button button-primary" id="tgs-request-parent-btn">
+                                            <span class="dashicons dashicons-admin-multisite" style="line-height: 1.4;"></span>
+                                            <?php esc_html_e('Yêu Cầu', 'tgs-sync-roll-up'); ?>
+                                        </button>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+
+                            <?php if ($is_pending): ?>
+                                <p class="description" style="color: #d63638; margin-top: 8px;">
+                                    <span class="dashicons dashicons-clock" style="vertical-align: middle;"></span>
+                                    <?php esc_html_e('Yêu cầu đang chờ shop cha xác nhận.', 'tgs-sync-roll-up'); ?>
                                 </p>
                             <?php endif; ?>
 
@@ -591,5 +619,45 @@ input:checked + .tgs-slider:before {
     color: #666;
     font-style: italic;
     margin: 0;
+}
+
+/* Button Danger - Red Button Style */
+.button-danger {
+    background: #d63638 !important;
+    border-color: #d63638 !important;
+    color: #fff !important;
+}
+
+.button-danger:hover {
+    background: #ba2d2f !important;
+    border-color: #ba2d2f !important;
+}
+
+.button-danger:focus {
+    box-shadow: 0 0 0 1px #fff, 0 0 0 3px #d63638 !important;
+}
+
+.tgs-parent-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.tgs-parent-actions .spinner {
+    float: none;
+    margin: 0;
+}
+
+.tgs-parent-actions .tgs-message {
+    white-space: nowrap;
+    font-size: 13px;
+}
+
+.tgs-parent-actions .tgs-message.success {
+    color: #00a32a;
+}
+
+.tgs-parent-actions .tgs-message.error {
+    color: #d63638;
 }
 </style>

@@ -25,6 +25,9 @@
             // Parent form submit (riêng biệt)
             $('#tgs-parent-form').on('submit', this.handleParentSubmit.bind(this));
 
+            // Cancel parent request button
+            $('#tgs-cancel-parent-btn').on('click', this.handleCancelParentRequest.bind(this));
+
             // Settings form submit
             $('#tgs-settings-form').on('submit', this.handleSettingsSubmit.bind(this));
 
@@ -70,28 +73,33 @@
         },
 
         /**
-         * Handle parent form submit
+         * Handle parent form submit (Yêu Cầu)
          */
         handleParentSubmit: function(e) {
             e.preventDefault();
 
             var $form = $(e.target);
-            var $button = $form.find('#tgs-save-parent-btn');
+            var $button = $form.find('#tgs-request-parent-btn');
             var $spinner = $form.find('#tgs-parent-spinner');
             var $message = $form.find('#tgs-save-parent-message');
+            var $select = $form.find('#parent_blog_id');
+
+            // Validate: parent_blog_id phải được chọn
+            var parentBlogId = $select.val();
+            if (!parentBlogId) {
+                $message.addClass('error').text('Vui lòng chọn shop cha trước khi gửi yêu cầu.');
+                return;
+            }
 
             // Show loading
             $button.prop('disabled', true);
             $spinner.addClass('is-active');
             $message.removeClass('success error').text('');
 
-            // Gather form data
-            var parentBlogId = $form.find('#parent_blog_id').val();
-
             var formData = {
                 action: 'tgs_save_parent_shop',
                 nonce: tgsSyncRollUp.nonce,
-                parent_blog_id: parentBlogId || ''
+                parent_blog_id: parentBlogId
             };
 
             // Send AJAX request
@@ -100,7 +108,54 @@
                     if (response.success) {
                         $message.addClass('success').text(response.data.message);
 
-                        // Reload page sau 1 giây để cập nhật hierarchy tree và khóa dropdown
+                        // Reload page sau 1 giây để cập nhật UI
+                        setTimeout(function() {
+                            location.reload();
+                        }, 1000);
+                    } else {
+                        $message.addClass('error').text(response.data.message || tgsSyncRollUp.i18n.error);
+                        $button.prop('disabled', false);
+                        $spinner.removeClass('is-active');
+                    }
+                })
+                .fail(function() {
+                    $message.addClass('error').text(tgsSyncRollUp.i18n.error);
+                    $button.prop('disabled', false);
+                    $spinner.removeClass('is-active');
+                });
+        },
+
+        /**
+         * Handle cancel parent request (Hủy Yêu Cầu)
+         */
+        handleCancelParentRequest: function(e) {
+            e.preventDefault();
+
+            if (!confirm('Bạn có chắc chắn muốn hủy yêu cầu này?')) {
+                return;
+            }
+
+            var $button = $(e.target).closest('button');
+            var $spinner = $('#tgs-parent-spinner');
+            var $message = $('#tgs-save-parent-message');
+
+            // Show loading
+            $button.prop('disabled', true);
+            $spinner.addClass('is-active');
+            $message.removeClass('success error').text('');
+
+            var formData = {
+                action: 'tgs_cancel_parent_request',
+                nonce: tgsSyncRollUp.nonce
+            };
+
+            // Send AJAX request
+            $.post(tgsSyncRollUp.ajaxUrl, formData)
+                .done(function(response) {
+                    if (response.success) {
+                        $message.addClass('success').text(response.data.message);
+
+                        // Reload page sau 1 giây để cập nhật UI
                         setTimeout(function() {
                             location.reload();
                         }, 1000);
