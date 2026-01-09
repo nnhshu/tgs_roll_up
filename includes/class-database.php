@@ -51,7 +51,7 @@ class TGS_Sync_Roll_Up_Database
         $sql = "CREATE TABLE $config_table (
             config_id BIGINT NOT NULL AUTO_INCREMENT,
             blog_id BIGINT NOT NULL,
-            parent_blog_ids JSON,
+            parent_blog_id BIGINT,
             sync_interval VARCHAR(50) DEFAULT 'hourly',
             sync_enabled TINYINT DEFAULT 1,
             last_sync_at DATETIME,
@@ -61,7 +61,8 @@ class TGS_Sync_Roll_Up_Database
             created_at DATETIME NOT NULL,
             updated_at DATETIME,
             PRIMARY KEY (config_id),
-            UNIQUE KEY uk_blog_id (blog_id)
+            UNIQUE KEY uk_blog_id (blog_id),
+            KEY idx_parent_blog_id (parent_blog_id)
         ) $charset_collate;";
 
         dbDelta($sql);
@@ -156,14 +157,12 @@ class TGS_Sync_Roll_Up_Database
             )
         );
 
-        if ($config) {
-            $config->parent_blog_ids = json_decode($config->parent_blog_ids, true) ?: array();
-        } else {
+        if (!$config) {
             // Return default config as object
             $config = (object) array(
                 'config_id'                 => 0,
                 'blog_id'                   => $blog_id,
-                'parent_blog_ids'           => array(),
+                'parent_blog_id'            => null,
                 'sync_interval'             => 'hourly',
                 'sync_enabled'              => 1,
                 'last_sync_at'              => null,
@@ -194,19 +193,16 @@ class TGS_Sync_Roll_Up_Database
             )
         );
 
-        // Handle parent_blog_ids - có thể là array hoặc đã là JSON string
-        $parent_ids = isset($data['parent_blog_ids']) ? $data['parent_blog_ids'] : array();
-        if (is_string($parent_ids)) {
-            // Đã là JSON string rồi
-            $parent_ids_json = $parent_ids;
-        } else {
-            // Là array, cần encode
-            $parent_ids_json = json_encode($parent_ids);
+        // Handle parent_blog_id - single parent only
+        $parent_id = isset($data['parent_blog_id']) ? intval($data['parent_blog_id']) : null;
+        // Nếu là 0 hoặc empty, set thành NULL
+        if (empty($parent_id)) {
+            $parent_id = null;
         }
 
         $save_data = array(
             'blog_id'           => $blog_id,
-            'parent_blog_ids'   => $parent_ids_json,
+            'parent_blog_id'    => $parent_id,
             'sync_interval'     => isset($data['sync_interval']) ? $data['sync_interval'] : 'hourly',
             'sync_enabled'      => isset($data['sync_enabled']) ? intval($data['sync_enabled']) : 1,
             'auto_rollup_daily' => isset($data['auto_rollup_daily']) ? intval($data['auto_rollup_daily']) : 1,
@@ -312,8 +308,7 @@ class TGS_Sync_Roll_Up_Database
             'sync_interval'      => $config->sync_interval,
             'last_sync_at'       => $config->last_sync_at,
             'next_sync_at'       => $next_scheduled ? date('Y-m-d H:i:s', $next_scheduled) : null,
-            'parent_blog_ids'    => $config->parent_blog_ids,
-            'parent_blogs_count' => is_array($config->parent_blog_ids) ? count($config->parent_blog_ids) : 0,
+            'parent_blog_id'     => $config->parent_blog_id,
         );
     }
 }

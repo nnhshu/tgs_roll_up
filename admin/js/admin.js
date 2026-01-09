@@ -41,7 +41,7 @@
             $('.tgs-view-log-details').on('click', this.handleViewLogDetails.bind(this));
 
             // Parent shop selection validation
-            $('#parent_blog_ids').on('change', this.handleParentSelectionChange.bind(this));
+            $('#parent_blog_id').on('change', this.handleParentSelectionChange.bind(this));
 
             // Initialize parent validation on page load
             this.initParentValidation();
@@ -240,7 +240,7 @@
          * Initialize parent validation on page load
          */
         initParentValidation: function() {
-            var $select = $('#parent_blog_ids');
+            var $select = $('#parent_blog_id');
             if ($select.length === 0) {
                 return;
             }
@@ -248,9 +248,9 @@
             // Debug: log hierarchy data
             console.log('TGS Parent Validation - Hierarchy:', tgsSyncRollUp.shopHierarchy);
             console.log('TGS Parent Validation - Current Blog ID:', tgsSyncRollUp.currentBlogId);
-            console.log('TGS Parent Validation - Selected Values:', $select.val());
+            console.log('TGS Parent Validation - Selected Value:', $select.val());
 
-            // Run validation for currently selected values
+            // Run validation for currently selected value
             this.validateParentSelection();
         },
 
@@ -264,49 +264,45 @@
         /**
          * Validate parent selection using graph-based approach
          *
-         * Logic chính:
+         * Logic chính (Single Parent):
          * - Xây dựng đồ thị quan hệ cha-con từ hierarchy
-         * - Từ shop hiện tại, tìm tất cả các shop có thể đến được qua đường đi gián tiếp
-         * - Shop X bị disable nếu: có thể đến X qua shop trung gian (A → B → X)
-         *   VÀ X không phải là cha trực tiếp đã được cấu hình
+         * - Từ shop hiện tại, tìm tất cả các shop con/cháu (descendants)
+         * - Shop X bị disable nếu: X là con/cháu của shop hiện tại (tạo cycle)
          *
-         * Ví dụ: hierarchy = {10: [2], 2: [1]}
-         * - Shop 10 có cha = [2], Shop 2 có cha = [1]
-         * - Đang ở Shop 10:
-         *   + 2 là cha trực tiếp → KHÔNG disable
-         *   + 1 có thể đến qua 2 (10 → 2 → 1) → DISABLE (phải qua trung gian 2)
-         *
-         * THÊM: Disable các con/cháu của shop hiện tại để tránh vòng lặp (cycle)
+         * Ví dụ: hierarchy = {10: 2, 2: 1}
+         * - Shop 10 có cha = 2, Shop 2 có cha = 1
+         * - Đang ở Shop 2:
+         *   + 1 là cha → OK
+         *   + 10 là con của 2 → DISABLE (tránh cycle)
          */
         validateParentSelection: function() {
-            var $select = $('#parent_blog_ids');
+            var $select = $('#parent_blog_id');
             var $warning = $('#tgs-parent-validation-warning');
             var hierarchy = tgsSyncRollUp.shopHierarchy || {};
             var currentBlogId = parseInt(tgsSyncRollUp.currentBlogId, 10);
 
-            // Lấy danh sách cha trực tiếp của shop hiện tại (đã cấu hình)
-            var directParents = (hierarchy[currentBlogId] || []).map(function(v) {
-                return parseInt(v, 10);
-            });
+            // Lấy cha trực tiếp của shop hiện tại (đã cấu hình)
+            var directParent = hierarchy[currentBlogId] ? parseInt(hierarchy[currentBlogId], 10) : null;
 
-            console.log('=== TGS Graph Validation ===');
+            console.log('=== TGS Graph Validation (Single Parent) ===');
             console.log('Current Blog ID:', currentBlogId);
-            console.log('Direct parents (configured):', directParents);
+            console.log('Direct parent (configured):', directParent);
             console.log('Full hierarchy:', hierarchy);
-
-            // Xây dựng graph và tìm các shop có thể đến được qua trung gian (ancestors)
-            var reachableViaIntermediate = this.findReachableViaIntermediate(hierarchy, currentBlogId, directParents);
 
             // TÌM TẤT CẢ CON/CHÁU (descendants) của shop hiện tại để ngăn cycle
             var descendants = this.findAllDescendants(hierarchy, currentBlogId);
 
-            console.log('Reachable via intermediate (should be disabled):', reachableViaIntermediate);
             console.log('Descendants (would create cycle):', descendants);
 
             // Reset all options first, then disable invalid ones
             $select.find('option').each(function() {
                 var $option = $(this);
                 var blogId = parseInt($option.val(), 10);
+
+                // Skip empty value option
+                if (!blogId || isNaN(blogId)) {
+                    return;
+                }
 
                 // Skip if it's the current blog
                 if (blogId === currentBlogId) {
@@ -320,43 +316,23 @@
                 if (descendants.indexOf(blogId) !== -1) {
                     $option.prop('disabled', true);
                     $option.addClass('tgs-descendant-disabled');
-                    $option.removeClass('tgs-ancestor-disabled');
                     if (originalText.indexOf('[shop con') === -1) {
-                        $option.text(originalText + ' [shop con - không thể chọn]');
-                    }
-                    return;
-                }
-
-                // Case 2: Đây là tổ tiên có thể đến qua trung gian → DISABLE
-                if (reachableViaIntermediate.indexOf(blogId) !== -1) {
-                    $option.prop('disabled', true);
-                    $option.addClass('tgs-ancestor-disabled');
-                    $option.removeClass('tgs-descendant-disabled');
-                    if (originalText.indexOf('[phải qua trung gian]') === -1) {
-                        $option.text(originalText + ' [phải qua trung gian]');
+                        $option.text(originalText + ' [shop con - tạo vòng lặp]');
                     }
                     return;
                 }
 
                 // Không bị disable → reset
                 $option.prop('disabled', false);
-                $option.removeClass('tgs-ancestor-disabled tgs-descendant-disabled');
+                $option.removeClass('tgs-descendant-disabled');
                 $option.text(originalText);
             });
 
             // Show/hide warning message
-            var ancestorCount = $select.find('option.tgs-ancestor-disabled').length;
             var descendantCount = $select.find('option.tgs-descendant-disabled').length;
 
-            if (ancestorCount > 0 || descendantCount > 0) {
-                var messages = [];
-                if (descendantCount > 0) {
-                    messages.push(descendantCount + ' shop con/cháu (chọn sẽ tạo vòng lặp)');
-                }
-                if (ancestorCount > 0) {
-                    messages.push(ancestorCount + ' shop tổ tiên (đã đến được qua trung gian)');
-                }
-                $warning.find('.warning-text').text('Đã ẩn: ' + messages.join(', ') + '.');
+            if (descendantCount > 0) {
+                $warning.find('.warning-text').text('Đã ẩn ' + descendantCount + ' shop con/cháu (chọn sẽ tạo vòng lặp).');
                 $warning.show();
             } else {
                 $warning.hide();
@@ -367,7 +343,7 @@
          * Tìm tất cả con/cháu (descendants) của một shop
          * Dùng BFS duyệt ngược từ hierarchy (parent → child)
          *
-         * @param {Object} hierarchy - Map: blogId → [parentIds]
+         * @param {Object} hierarchy - Map: blogId → parentId (single parent)
          * @param {number} blogId - Blog ID cần tìm descendants
          * @return {Array} Danh sách descendants
          */
@@ -380,14 +356,14 @@
             var children = {};
             for (var id in hierarchy) {
                 if (hierarchy.hasOwnProperty(id)) {
-                    var parentIds = hierarchy[id] || [];
-                    parentIds.forEach(function(parentId) {
+                    var parentId = hierarchy[id];
+                    if (parentId) {
                         var pid = parseInt(parentId, 10);
                         if (!children[pid]) {
                             children[pid] = [];
                         }
                         children[pid].push(parseInt(id, 10));
-                    });
+                    }
                 }
             }
 

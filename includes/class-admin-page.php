@@ -216,13 +216,10 @@ class TGS_Admin_Page
         $all_blogs = $this->database->get_all_blogs();
         $cron_info = $this->cron_handler->get_next_scheduled();
 
-        // Lấy danh sách shop cha đã cấu hình (đã được decode trong get_config)
-        $parent_blog_ids = array();
-        if ($config && !empty($config->parent_blog_ids)) {
-            // parent_blog_ids đã là array từ get_config()
-            $parent_blog_ids = is_array($config->parent_blog_ids)
-                ? $config->parent_blog_ids
-                : (json_decode($config->parent_blog_ids, true) ?? array());
+        // Lấy shop cha đã cấu hình (single parent)
+        $parent_blog_id = null;
+        if ($config && !empty($config->parent_blog_id)) {
+            $parent_blog_id = intval($config->parent_blog_id);
         }
 
         // Lấy hierarchy để hiển thị cây phân cấp
@@ -243,7 +240,7 @@ class TGS_Admin_Page
     /**
      * Xây dựng cây phân cấp từ hierarchy data
      *
-     * @param array $hierarchy Map blog_id => [parent_ids]
+     * @param array $hierarchy Map blog_id => parent_id (single parent)
      * @param array $blog_names Map blog_id => blog_name
      * @return array Hierarchy tree structure
      */
@@ -253,8 +250,8 @@ class TGS_Admin_Page
         $children = array();
         $all_children = array(); // Tất cả blog_ids đã là con của ai đó
 
-        foreach ($hierarchy as $blog_id => $parent_ids) {
-            foreach ($parent_ids as $parent_id) {
+        foreach ($hierarchy as $blog_id => $parent_id) {
+            if (!empty($parent_id)) {
                 if (!isset($children[$parent_id])) {
                     $children[$parent_id] = array();
                 }
@@ -266,31 +263,22 @@ class TGS_Admin_Page
         }
         $all_children = array_unique($all_children);
 
-        // Root nodes = blogs không có cha (parent_ids rỗng)
-        // VÀ không là con của ai trong hierarchy
+        // Root nodes = blogs không có cha (parent_id null/empty)
         $root_nodes = array();
-        foreach ($hierarchy as $blog_id => $parent_ids) {
-            if (empty($parent_ids)) {
+        foreach ($hierarchy as $blog_id => $parent_id) {
+            if (empty($parent_id)) {
                 $root_nodes[] = $blog_id;
             }
         }
 
-        // Đảm bảo root_nodes không chứa blogs đã là con của root khác
-        // (trường hợp này không nên xảy ra nếu data đúng, nhưng để safe)
+        // Đảm bảo root_nodes không chứa blogs đã là con của ai
         $root_nodes = array_values(array_diff($root_nodes, $all_children));
 
-        // Nếu không có root node, có thể có cycle hoặc tất cả đều có cha
+        // Nếu không có root node, có thể có cycle
         // Fallback: lấy blogs có cha không tồn tại trong hierarchy
         if (empty($root_nodes)) {
-            foreach ($hierarchy as $blog_id => $parent_ids) {
-                $has_valid_parent = false;
-                foreach ($parent_ids as $parent_id) {
-                    if (isset($hierarchy[$parent_id])) {
-                        $has_valid_parent = true;
-                        break;
-                    }
-                }
-                if (!$has_valid_parent) {
+            foreach ($hierarchy as $blog_id => $parent_id) {
+                if (!empty($parent_id) && !isset($hierarchy[$parent_id])) {
                     $root_nodes[] = $blog_id;
                 }
             }
@@ -340,13 +328,20 @@ class TGS_Admin_Page
         $blog_id = get_current_blog_id();
 
         // Lấy dữ liệu từ request
-        $parent_blog_ids = isset($_POST['parent_blog_ids']) ? array_map('intval', $_POST['parent_blog_ids']) : array();
+        $parent_blog_id = isset($_POST['parent_blog_id']) ? intval($_POST['parent_blog_id']) : null;
         $sync_enabled = isset($_POST['sync_enabled']) ? intval($_POST['sync_enabled']) : 0;
         $sync_frequency = isset($_POST['sync_frequency']) ? sanitize_text_field($_POST['sync_frequency']) : 'hourly';
 
-        // Lưu config - parent_blog_ids là array, save_config sẽ json_encode
+        // Validate: không cho phép chọn chính mình làm cha
+        if (!empty($parent_blog_id) && $parent_blog_id == $blog_id) {
+            wp_send_json_error(array(
+                'message' => __('Không thể chọn chính mình làm shop cha!', 'tgs-sync-roll-up'),
+            ));
+        }
+
+        // Lưu config - parent_blog_id là single value
         $config_data = array(
-            'parent_blog_ids' => $parent_blog_ids,
+            'parent_blog_id' => $parent_blog_id,
             'sync_enabled' => $sync_enabled,
             'sync_interval' => $sync_frequency,
         );
@@ -665,7 +660,7 @@ class TGS_Admin_Page
 
     /**
      * Lấy thông tin hierarchy của tất cả shops
-     * Trả về array: blog_id => array parents
+     * Trả về array: blog_id => parent_id (single parent)
      *
      * @return array Shop hierarchy
      */
@@ -674,41 +669,15 @@ class TGS_Admin_Page
         global $wpdb;
 
         $hierarchy = array();
-        $all_blogs = $this->database->get_all_blogs();
-        $original_blog = get_current_blog_id();
 
-        foreach ($all_blogs as $blog) {
-            $blog_id = intval($blog->blog_id);
-            $parent_ids = array();
+        // Đọc từ bảng config chung wp_sync_roll_up_config
+        $config_table = TGSR_TABLE_SYNC_ROLL_UP_CONFIG;
+        $configs = $wpdb->get_results("SELECT blog_id, parent_blog_id FROM {$config_table}");
 
-            // Switch sang blog để đọc config từ bảng của blog đó
-            if ($blog_id != $original_blog) {
-                switch_to_blog($blog_id);
-            }
-
-            // Đọc trực tiếp từ bảng config của blog hiện tại
-            $config_table = $wpdb->prefix . 'sync_roll_up_config';
-            $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$config_table}'");
-
-            if ($table_exists) {
-                $config = $wpdb->get_row($wpdb->prepare(
-                    "SELECT parent_blog_ids FROM {$config_table} WHERE blog_id = %d",
-                    $blog_id
-                ));
-
-                if ($config && !empty($config->parent_blog_ids)) {
-                    $decoded = json_decode($config->parent_blog_ids, true);
-                    if (is_array($decoded)) {
-                        $parent_ids = $decoded;
-                    }
-                }
-            }
-
-            if ($blog_id != $original_blog) {
-                restore_current_blog();
-            }
-
-            $hierarchy[$blog_id] = array_map('intval', $parent_ids);
+        foreach ($configs as $config) {
+            $blog_id = intval($config->blog_id);
+            $parent_id = !empty($config->parent_blog_id) ? intval($config->parent_blog_id) : null;
+            $hierarchy[$blog_id] = $parent_id;
         }
 
         return $hierarchy;
@@ -725,54 +694,19 @@ class TGS_Admin_Page
         global $wpdb;
 
         $shops_syncing_to_me = array();
-        $all_blogs = get_sites();
 
-        // Build UNION query to check all config tables at once
-        $union_queries = array();
-        $blog_info = array(); // Store blog_id => blog_name mapping
+        // Đọc từ bảng config chung
+        $config_table = TGSR_TABLE_SYNC_ROLL_UP_CONFIG;
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT blog_id FROM {$config_table} WHERE parent_blog_id = %d",
+            $parent_blog_id
+        ));
 
-        foreach ($all_blogs as $blog) {
-            $bid = $blog->blog_id;
-            if ($bid == $parent_blog_id) continue;
-
-            // Build table name for this blog
-            $table_prefix = $wpdb->get_blog_prefix($bid);
-            $config_table = $table_prefix . 'sync_roll_up_config';
-
-            // Store blog name for later use
-            $blog_info[$bid] = $blog->blogname;
-
-            // Add to UNION query
-            $union_queries[] = $wpdb->prepare(
-                "SELECT %d as blog_id, parent_blog_ids
-                FROM {$config_table}
-                WHERE blog_id = %d
-                AND parent_blog_ids IS NOT NULL
-                AND parent_blog_ids != ''",
-                $bid,
-                $bid
-            );
-        }
-
-        if (empty($union_queries)) {
-            return $shops_syncing_to_me;
-        }
-
-        // Execute single UNION query to get all configs at once
-        $union_sql = implode(' UNION ALL ', $union_queries);
-        $results = $wpdb->get_results($union_sql);
-
-        // Filter results to find shops syncing to this parent
         foreach ($results as $row) {
-            if (!empty($row->parent_blog_ids)) {
-                $pids = json_decode($row->parent_blog_ids, true);
-                if (is_array($pids) && in_array($parent_blog_id, $pids)) {
-                    $shops_syncing_to_me[] = array(
-                        'blog_id' => $row->blog_id,
-                        'blog_name' => isset($blog_info[$row->blog_id]) ? $blog_info[$row->blog_id] : 'Unknown'
-                    );
-                }
-            }
+            $shops_syncing_to_me[] = array(
+                'blog_id' => $row->blog_id,
+                'blog_name' => self::get_blog_name($row->blog_id)
+            );
         }
 
         return $shops_syncing_to_me;

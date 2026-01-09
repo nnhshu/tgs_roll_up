@@ -23,17 +23,17 @@ if (!defined('ABSPATH')) {
             <table class="form-table">
                 <tr>
                     <th scope="row">
-                        <label for="parent_blog_ids"><?php esc_html_e('Shop cha', 'tgs-sync-roll-up'); ?></label>
+                        <label for="parent_blog_id"><?php esc_html_e('Shop cha', 'tgs-sync-roll-up'); ?></label>
                     </th>
                     <td>
                         <?php if (!empty($all_blogs)): ?>
-                            <select name="parent_blog_id" id="parent_blog_ids" class="tgs-select2" style="width: 100%; max-width: 400px;">
-                                <option value=""><?php esc_html_e('-- Chọn shop cha --', 'tgs-sync-roll-up'); ?></option>
+                            <select name="parent_blog_id" id="parent_blog_id" class="tgs-select2" style="width: 100%; max-width: 400px;">
+                                <option value=""><?php esc_html_e('-- Không có shop cha --', 'tgs-sync-roll-up'); ?></option>
                                 <?php foreach ($all_blogs as $blog): ?>
                                     <?php if ($blog->blog_id != $blog_id): // Không cho chọn chính mình ?>
-                                        <option value="<?php echo esc_attr($blog->blog_id); ?>" 
-                                                <?php echo (!empty($parent_blog_ids) && $parent_blog_ids[0] == $blog->blog_id) ? 'selected' : ''; ?>>
-                                            <?php echo esc_html(TGS_Admin_Page::get_blog_name($blog->blog_id)); ?> 
+                                        <option value="<?php echo esc_attr($blog->blog_id); ?>"
+                                                <?php selected($parent_blog_id ?? 0, $blog->blog_id); ?>>
+                                            <?php echo esc_html(TGS_Admin_Page::get_blog_name($blog->blog_id)); ?>
                                             (ID: <?php echo esc_html($blog->blog_id); ?>)
                                         </option>
                                     <?php endif; ?>
@@ -78,14 +78,14 @@ if (!defined('ABSPATH')) {
 
                     $is_current = ($node_id == $current_blog_id);
                     $node_name = isset($blog_names[$node_id]) ? $blog_names[$node_id] : "Blog #{$node_id}";
-                    $parent_ids = isset($hierarchy[$node_id]) ? $hierarchy[$node_id] : array();
+                    $parent_id = isset($hierarchy[$node_id]) ? $hierarchy[$node_id] : null;
                     $child_ids = isset($children[$node_id]) ? $children[$node_id] : array();
 
                     $class = 'tgs-tree-node';
                     if ($is_current) {
                         $class .= ' tgs-tree-node-current';
                     }
-                    if (!empty($parent_ids)) {
+                    if (!empty($parent_id)) {
                         $class .= ' tgs-tree-node-has-parent';
                     }
                     if (!empty($child_ids)) {
@@ -96,7 +96,7 @@ if (!defined('ABSPATH')) {
                     $output .= '<div class="tgs-tree-node-content">';
 
                     // Icon
-                    if (empty($parent_ids)) {
+                    if (empty($parent_id)) {
                         $output .= '<span class="dashicons dashicons-admin-multisite tgs-tree-icon tgs-tree-icon-root"></span>';
                     } elseif (empty($child_ids)) {
                         $output .= '<span class="dashicons dashicons-store tgs-tree-icon tgs-tree-icon-leaf"></span>';
@@ -114,13 +114,10 @@ if (!defined('ABSPATH')) {
                     }
 
                     // Parent indicator
-                    if (!empty($parent_ids) && !$is_current) {
-                        $parent_names = array();
-                        foreach ($parent_ids as $pid) {
-                            $parent_names[] = isset($blog_names[$pid]) ? $blog_names[$pid] : "Blog #{$pid}";
-                        }
+                    if (!empty($parent_id) && !$is_current) {
+                        $parent_name = isset($blog_names[$parent_id]) ? $blog_names[$parent_id] : "Blog #{$parent_id}";
                         $output .= '<span class="tgs-tree-arrow">→</span>';
-                        $output .= '<span class="tgs-tree-parents">' . esc_html(implode(', ', $parent_names)) . '</span>';
+                        $output .= '<span class="tgs-tree-parents">' . esc_html($parent_name) . '</span>';
                     }
 
                     $output .= '</div>'; // .tgs-tree-node-content
@@ -260,15 +257,9 @@ if (!defined('ABSPATH')) {
                 <tr>
                     <th><?php esc_html_e('Shop cha đã cấu hình', 'tgs-sync-roll-up'); ?></th>
                     <td>
-                        <?php if (!empty($parent_blog_ids)): ?>
-                            <ul>
-                                <?php foreach ($parent_blog_ids as $parent_id): ?>
-                                    <li>
-                                        <code><?php echo esc_html(TGS_Admin_Page::get_blog_name($parent_id)); ?></code>
-                                        (ID: <?php echo esc_html($parent_id); ?>)
-                                    </li>
-                                <?php endforeach; ?>
-                            </ul>
+                        <?php if (!empty($parent_blog_id)): ?>
+                            <code><?php echo esc_html(TGS_Admin_Page::get_blog_name($parent_blog_id)); ?></code>
+                            (ID: <?php echo esc_html($parent_blog_id); ?>)
                         <?php else: ?>
                             <em><?php esc_html_e('Chưa cấu hình', 'tgs-sync-roll-up'); ?></em>
                         <?php endif; ?>
@@ -404,13 +395,13 @@ input:checked + .tgs-slider:before {
 }
 
 /* Disabled option styling for select */
-#parent_blog_ids option:disabled {
+#parent_blog_id option:disabled {
     color: #999;
     background-color: #f5f5f5;
     font-style: italic;
 }
 
-#parent_blog_ids option.tgs-ancestor-disabled {
+#parent_blog_id option.tgs-ancestor-disabled {
     color: #999 !important;
     background-color: #ffe6e6 !important;
 }

@@ -55,20 +55,13 @@ class TGS_Sync_Manager
         // Lấy cấu hình của shop hiện tại
         $config = $this->database->get_config($source_blog_id);
 
-        if (!$config || empty($config->parent_blog_ids)) {
-            $results['message'] = 'No parent shops configured';
+        if (!$config || empty($config->parent_blog_id)) {
+            $results['message'] = 'No parent shop configured';
             return $results;
         }
 
-        // parent_blog_ids đã là array từ get_config()
-        $parent_ids = is_array($config->parent_blog_ids)
-            ? $config->parent_blog_ids
-            : json_decode($config->parent_blog_ids, true);
-
-        if (empty($parent_ids) || !is_array($parent_ids)) {
-            $results['message'] = 'Invalid parent blog IDs';
-            return $results;
-        }
+        // parent_blog_id là single value
+        $parent_blog_id = intval($config->parent_blog_id);
 
         // Lấy TẤT CẢ records roll_up của shop con cho ngày này
         $table = $wpdb->prefix . 'roll_up';
@@ -94,61 +87,56 @@ class TGS_Sync_Manager
             return $results;
         }
 
-        // Sync từng record lên tất cả shop cha
+        // Sync lên shop cha duy nhất
         $synced_count = 0;
-        foreach ($parent_ids as $parent_blog_id) {
-            $parent_blog_id = intval($parent_blog_id);
 
-            // Chuyển sang blog cha
-            switch_to_blog($parent_blog_id);
+        // Chuyển sang blog cha
+        switch_to_blog($parent_blog_id);
 
-            try {
-                foreach ($source_records as $record) {
-                    // Tạo data để sync lên cha (giữ nguyên blog_id của shop con)
-                    $parent_data = array(
-                        'blog_id' => $source_blog_id,  // Giữ nguyên blog_id của shop con
-                        // 'blog_name' => $record['blog_name'] ?? '',  // Giữ tên shop con
-                        'roll_up_date' => $record['roll_up_date'],
-                        'roll_up_day' => $record['roll_up_day'],
-                        'roll_up_month' => $record['roll_up_month'],
-                        'roll_up_year' => $record['roll_up_year'],
-                        'local_product_name_id' => $record['local_product_name_id'],
-                        // 'global_product_name_id' => $record['global_product_name_id'] ?? null,
-                        'amount' => $record['amount'],
-                        'quantity' => $record['quantity'],
-                        'type' => $record['type'],
-                    );
+        try {
+            foreach ($source_records as $record) {
+                // Tạo data để sync lên cha (giữ nguyên blog_id của shop con)
+                $parent_data = array(
+                    'blog_id' => $source_blog_id,  // Giữ nguyên blog_id của shop con
+                    'roll_up_date' => $record['roll_up_date'],
+                    'roll_up_day' => $record['roll_up_day'],
+                    'roll_up_month' => $record['roll_up_month'],
+                    'roll_up_year' => $record['roll_up_year'],
+                    'local_product_name_id' => $record['local_product_name_id'],
+                    'amount' => $record['amount'],
+                    'quantity' => $record['quantity'],
+                    'type' => $record['type'],
+                );
 
-                    // Sync meta (lot_ids) từ shop con
-                    if (!empty($record['meta'])) {
-                        $meta_data = json_decode($record['meta'], true);
-                        if (is_array($meta_data) && isset($meta_data['lot_ids']) && is_array($meta_data['lot_ids'])) {
-                            $parent_data['lot_ids'] = $meta_data['lot_ids'];
-                        }
-                    }
-
-                    // Ghi đè dữ liệu cũ (overwrite = true) thay vì cộng dồn
-                    // Lưu ý: lot_ids sẽ được merge trong save_roll_up()
-                    $roll_up_id = $this->calculator->save_roll_up($parent_data, true);
-
-                    if ($roll_up_id) {
-                        $synced_count++;
+                // Sync meta (lot_ids) từ shop con
+                if (!empty($record['meta'])) {
+                    $meta_data = json_decode($record['meta'], true);
+                    if (is_array($meta_data) && isset($meta_data['lot_ids']) && is_array($meta_data['lot_ids'])) {
+                        $parent_data['lot_ids'] = $meta_data['lot_ids'];
                     }
                 }
 
-                $results['success'][] = array(
-                    'parent_blog_id' => $parent_blog_id,
-                    'records_synced' => count($source_records),
-                );
+                // Ghi đè dữ liệu cũ (overwrite = true) thay vì cộng dồn
+                // Lưu ý: lot_ids sẽ được merge trong save_roll_up()
+                $roll_up_id = $this->calculator->save_roll_up($parent_data, true);
 
-            } catch (Exception $e) {
-                $results['failed'][] = array(
-                    'parent_blog_id' => $parent_blog_id,
-                    'error' => $e->getMessage(),
-                );
-            } finally {
-                restore_current_blog();
+                if ($roll_up_id) {
+                    $synced_count++;
+                }
             }
+
+            $results['success'][] = array(
+                'parent_blog_id' => $parent_blog_id,
+                'records_synced' => count($source_records),
+            );
+
+        } catch (Exception $e) {
+            $results['failed'][] = array(
+                'parent_blog_id' => $parent_blog_id,
+                'error' => $e->getMessage(),
+            );
+        } finally {
+            restore_current_blog();
         }
 
         // Log kết quả
