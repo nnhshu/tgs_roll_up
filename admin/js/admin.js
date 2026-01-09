@@ -71,7 +71,7 @@
          */
         handleSettingsSubmit: function(e) {
             e.preventDefault();
-
+            
             var $form = $(e.target);
             var $button = $form.find('#tgs-save-settings-btn');
             var $spinner = $form.find('.spinner');
@@ -83,10 +83,12 @@
             $message.removeClass('success error').text('');
 
             // Gather form data
+            var parentBlogId = $form.find('#parent_blog_id').val();
+            
             var formData = {
                 action: 'tgs_save_sync_settings',
                 nonce: tgsSyncRollUp.nonce,
-                parent_blog_id: $form.find('[name="parent_blog_id"]').val() || 0,
+                parent_blog_id: parentBlogId || '',  // Gửi empty string nếu không chọn
                 sync_enabled: $form.find('[name="sync_enabled"]').is(':checked') ? 1 : 0,
                 sync_frequency: $form.find('[name="sync_frequency"]').val()
             };

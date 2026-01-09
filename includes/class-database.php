@@ -194,10 +194,9 @@ class TGS_Sync_Roll_Up_Database
         );
 
         // Handle parent_blog_id - single parent only
-        $parent_id = isset($data['parent_blog_id']) ? intval($data['parent_blog_id']) : null;
-        // Nếu là 0 hoặc empty, set thành NULL
-        if (empty($parent_id)) {
-            $parent_id = null;
+        $parent_id = null;
+        if (isset($data['parent_blog_id']) && !empty($data['parent_blog_id'])) {
+            $parent_id = intval($data['parent_blog_id']);
         }
 
         $save_data = array(

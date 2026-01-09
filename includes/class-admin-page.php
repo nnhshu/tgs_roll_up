@@ -328,7 +328,10 @@ class TGS_Admin_Page
         $blog_id = get_current_blog_id();
 
         // Lấy dữ liệu từ request
-        $parent_blog_id = isset($_POST['parent_blog_id']) ? intval($_POST['parent_blog_id']) : null;
+        $parent_blog_id = isset($_POST['parent_blog_id']) && !empty($_POST['parent_blog_id'])
+            ? intval($_POST['parent_blog_id'])
+            : null;
+            
         $sync_enabled = isset($_POST['sync_enabled']) ? intval($_POST['sync_enabled']) : 0;
         $sync_frequency = isset($_POST['sync_frequency']) ? sanitize_text_field($_POST['sync_frequency']) : 'hourly';
 
@@ -348,16 +351,18 @@ class TGS_Admin_Page
 
         $result = $this->database->save_config($config_data, $blog_id);
 
-        if ($result) {
+        // $result có thể là false (lỗi) hoặc số rows affected (có thể là 0 nếu không có thay đổi)
+        // Coi như success nếu không phải false
+        if ($result !== false) {
             // Cập nhật cron frequency nếu thay đổi
             $this->cron_handler->update_cron_frequency($sync_frequency);
 
             wp_send_json_success(array(
-                'message' => __('Settings saved successfully!', 'tgs-sync-roll-up'),
+                'message' => __('Cài đặt đã được lưu thành công!', 'tgs-sync-roll-up'),
             ));
         } else {
             wp_send_json_error(array(
-                'message' => __('Failed to save settings', 'tgs-sync-roll-up'),
+                'message' => __('Lỗi khi lưu cài đặt', 'tgs-sync-roll-up'),
             ));
         }
     }
