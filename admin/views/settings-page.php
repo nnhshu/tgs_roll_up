@@ -27,7 +27,7 @@ if (!defined('ABSPATH')) {
                     </th>
                     <td>
                         <?php if (!empty($all_blogs)): ?>
-                            <select name="parent_blog_id" id="parent_blog_id" class="tgs-select2" style="width: 100%; max-width: 400px;">
+                            <select name="parent_blog_id" id="parent_blog_id" class="tgs-select2" style="width: 100%; max-width: 400px;" <?php disabled(!empty($parent_blog_id)); ?>>
                                 <option value=""><?php esc_html_e('-- Không có shop cha --', 'tgs-sync-roll-up'); ?></option>
                                 <?php foreach ($all_blogs as $blog): ?>
                                     <?php if ($blog->blog_id != $blog_id): // Không cho chọn chính mình ?>
@@ -39,7 +39,14 @@ if (!defined('ABSPATH')) {
                                     <?php endif; ?>
                                 <?php endforeach; ?>
                             </select>
-                         
+
+                            <?php if (!empty($parent_blog_id)): ?>
+                                <p class="description" style="color: #856404; margin-top: 8px;">
+                                    <span class="dashicons dashicons-lock" style="vertical-align: middle;"></span>
+                                    <?php esc_html_e('Shop cha đã được cấu hình và không thể thay đổi.', 'tgs-sync-roll-up'); ?>
+                                </p>
+                            <?php endif; ?>
+
                             <p id="tgs-parent-validation-warning" class="tgs-validation-warning" style="display: none;">
                                 <span class="dashicons dashicons-warning"></span>
                                 <span class="warning-text"></span>
