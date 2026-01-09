@@ -24,7 +24,7 @@ class TGS_Sync_Roll_Up_Database
     public function __construct()
     {
         global $wpdb;
-        $this->config_table = $wpdb->prefix . 'sync_roll_up_config';
+        $this->config_table = TGSR_TABLE_SYNC_ROLL_UP_CONFIG;
     }
 
     /**
@@ -32,8 +32,7 @@ class TGS_Sync_Roll_Up_Database
      */
     public static function get_config_table_name()
     {
-        global $wpdb;
-        return $wpdb->prefix . 'sync_roll_up_config';
+        return TGSR_TABLE_SYNC_ROLL_UP_CONFIG;
     }
 
     /**
@@ -52,24 +51,15 @@ class TGS_Sync_Roll_Up_Database
         $sql = "CREATE TABLE $config_table (
             config_id BIGINT NOT NULL AUTO_INCREMENT,
             blog_id BIGINT NOT NULL,
-
-            -- Cấu hình shop cha
             parent_blog_ids JSON,
-
-            -- Cấu hình cron
             sync_interval VARCHAR(50) DEFAULT 'hourly',
             sync_enabled TINYINT DEFAULT 1,
             last_sync_at DATETIME,
             next_sync_at DATETIME,
-
-            -- Cấu hình roll-up
             auto_rollup_daily TINYINT DEFAULT 1,
             rollup_time TIME DEFAULT '00:30:00',
-
-
             created_at DATETIME NOT NULL,
             updated_at DATETIME,
-
             PRIMARY KEY (config_id),
             UNIQUE KEY uk_blog_id (blog_id)
         ) $charset_collate;";
@@ -93,10 +83,10 @@ class TGS_Sync_Roll_Up_Database
 
         $charset_collate = $wpdb->get_charset_collate();
         $table_name = $wpdb->prefix . 'roll_up';
-
+        error_log("Creating roll_up table for blog ID: $blog_id as $table_name");
         $sql = "CREATE TABLE $table_name (
             roll_up_id BIGINT NOT NULL AUTO_INCREMENT,
-            blog_id BIGINT NOT NULL,
+            blog_id BIGINT,
             local_product_name_id BIGINT NOT NULL,
             global_product_name_id BIGINT,
             roll_up_date DATE NOT NULL,
@@ -147,11 +137,15 @@ class TGS_Sync_Roll_Up_Database
             $blog_id = get_current_blog_id();
         }
 
-        // Check if table exists first
-        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$this->config_table}'");
+        // Check if config table exists
+        $config_table_exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $this->config_table));
         
-        if (!$table_exists) {
-            // Table doesn't exist, create it
+        // Check if roll_up table exists
+        $roll_up_table = $wpdb->prefix . 'roll_up';
+        $roll_up_table_exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $roll_up_table));
+        
+        // If either table doesn't exist, create both
+        if (!$config_table_exists || !$roll_up_table_exists) {
             self::create_tables();
         }
 

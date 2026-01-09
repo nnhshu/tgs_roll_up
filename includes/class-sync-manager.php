@@ -689,55 +689,6 @@ class TGS_Sync_Manager
     }
 
     /**
-     * Aggregate dữ liệu từ tất cả shop con của một shop cha
-     *
-     * @param int $parent_blog_id Blog ID cha
-     * @param string $date Ngày
-     * @return array Dữ liệu aggregate
-     */
-    public function aggregate_children_data($parent_blog_id, $date)
-    {
-        $children_ids = $this->get_children_blogs($parent_blog_id);
-        $aggregated = array(
-            'total_revenue' => 0,
-            'total_strategic_revenue' => 0,
-            'total_normal_revenue' => 0,
-            'total_orders' => 0,
-            'total_new_customers' => 0,
-            'total_inventory_quantity' => 0,
-            'total_inventory_value' => 0,
-            'children_details' => array(),
-        );
-
-        foreach ($children_ids as $child_id) {
-            switch_to_blog($child_id);
-
-            $roll_up = $this->calculator->get_roll_up($child_id, $date);
-
-            if ($roll_up) {
-                $aggregated['total_revenue'] += floatval($roll_up->revenue_total);
-                $aggregated['total_strategic_revenue'] += floatval($roll_up->revenue_strategic_products);
-                $aggregated['total_normal_revenue'] += floatval($roll_up->revenue_normal_products);
-                $aggregated['total_orders'] += intval($roll_up->count_sales_orders);
-                $aggregated['total_new_customers'] += intval($roll_up->count_new_customers);
-                $aggregated['total_inventory_quantity'] += floatval($roll_up->inventory_total_quantity);
-                $aggregated['total_inventory_value'] += floatval($roll_up->inventory_total_value);
-
-                $aggregated['children_details'][$child_id] = array(
-                    'blog_id' => $child_id,
-                    'revenue' => $roll_up->revenue_total,
-                    'orders' => $roll_up->count_sales_orders,
-                    'new_customers' => $roll_up->count_new_customers,
-                );
-            }
-
-            restore_current_blog();
-        }
-
-        return $aggregated;
-    }
-
-    /**
      * Kiểm tra trạng thái sync của các shop con
      *
      * @param int $parent_blog_id Blog ID cha

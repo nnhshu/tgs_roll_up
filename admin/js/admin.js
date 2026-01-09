@@ -86,7 +86,7 @@
             var formData = {
                 action: 'tgs_save_sync_settings',
                 nonce: tgsSyncRollUp.nonce,
-                parent_blog_ids: $form.find('[name="parent_blog_ids[]"]').val() || [],
+                parent_blog_id: $form.find('[name="parent_blog_id"]').val() || 0,
                 sync_enabled: $form.find('[name="sync_enabled"]').is(':checked') ? 1 : 0,
                 sync_frequency: $form.find('[name="sync_frequency"]').val()
             };

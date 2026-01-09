@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
         <div class="tgs-panel">
             <h2><?php esc_html_e('Cấu hình Shop Cha (Parent Shops)', 'tgs-sync-roll-up'); ?></h2>
             <p class="description">
-                <?php esc_html_e('Chọn các shop cha để đồng bộ dữ liệu roll_up. Shop cha sẽ nhận dữ liệu tổng hợp từ shop này.', 'tgs-sync-roll-up'); ?>
+                <?php esc_html_e('Chọn shop cha để đồng bộ dữ liệu roll_up. Shop cha sẽ nhận dữ liệu tổng hợp từ shop này.', 'tgs-sync-roll-up'); ?>
             </p>
 
             <table class="form-table">
@@ -27,20 +27,19 @@ if (!defined('ABSPATH')) {
                     </th>
                     <td>
                         <?php if (!empty($all_blogs)): ?>
-                            <select name="parent_blog_ids[]" id="parent_blog_ids" multiple="multiple" class="tgs-select2" style="width: 100%; max-width: 400px;">
+                            <select name="parent_blog_id" id="parent_blog_ids" class="tgs-select2" style="width: 100%; max-width: 400px;">
+                                <option value=""><?php esc_html_e('-- Chọn shop cha --', 'tgs-sync-roll-up'); ?></option>
                                 <?php foreach ($all_blogs as $blog): ?>
                                     <?php if ($blog->blog_id != $blog_id): // Không cho chọn chính mình ?>
                                         <option value="<?php echo esc_attr($blog->blog_id); ?>" 
-                                                <?php echo in_array($blog->blog_id, $parent_blog_ids) ? 'selected' : ''; ?>>
+                                                <?php echo (!empty($parent_blog_ids) && $parent_blog_ids[0] == $blog->blog_id) ? 'selected' : ''; ?>>
                                             <?php echo esc_html(TGS_Admin_Page::get_blog_name($blog->blog_id)); ?> 
                                             (ID: <?php echo esc_html($blog->blog_id); ?>)
                                         </option>
                                     <?php endif; ?>
                                 <?php endforeach; ?>
                             </select>
-                            <p class="description">
-                                <?php esc_html_e('Giữ Ctrl để chọn nhiều shop. Bạn có thể chọn nhiều shop cha.', 'tgs-sync-roll-up'); ?>
-                            </p>
+                         
                             <p id="tgs-parent-validation-warning" class="tgs-validation-warning" style="display: none;">
                                 <span class="dashicons dashicons-warning"></span>
                                 <span class="warning-text"></span>
