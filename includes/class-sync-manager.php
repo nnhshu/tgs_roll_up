@@ -1,0 +1,863 @@
+<?php
+/**
+ * Sync Manager Class
+ * Đồng bộ dữ liệu roll_up lên các shop cha (parent shops)
+ *
+ * @package TGS_Sync_Roll_Up
+ * @since 1.0.0
+ */
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+class TGS_Sync_Manager
+{
+    /**
+     * Database instance
+     */
+    private $database;
+
+    /**
+     * Roll-up calculator instance
+     */
+    private $calculator;
+
+    /**
+     * Constructor
+     */
+    public function __construct()
+    {
+        $this->database = new TGS_Sync_Roll_Up_Database();
+        $this->calculator = new TGS_Roll_Up_Calculator();
+    }
+
+    /**
+     * Đồng bộ dữ liệu roll_up từ shop hiện tại lên các shop cha
+     *
+     * @param int $source_blog_id Blog ID nguồn
+     * @param string $date Ngày cần sync
+     * @return array Kết quả sync
+     */
+    public function sync_to_parents($source_blog_id, $date)
+    {
+        global $wpdb;
+
+        $results = array(
+            'success' => array(),
+            'failed' => array(),
+            'skipped' => array(),
+            'source_blog_id' => $source_blog_id,
+            'date' => $date,
+            'synced_at' => current_time('mysql'),
+        );
+
+        // Lấy cấu hình của shop hiện tại
+        $config = $this->database->get_config($source_blog_id);
+
+        if (!$config || empty($config->parent_blog_ids)) {
+            $results['message'] = 'No parent shops configured';
+            return $results;
+        }
+
+        // parent_blog_ids đã là array từ get_config()
+        $parent_ids = is_array($config->parent_blog_ids)
+            ? $config->parent_blog_ids
+            : json_decode($config->parent_blog_ids, true);
+
+        if (empty($parent_ids) || !is_array($parent_ids)) {
+            $results['message'] = 'Invalid parent blog IDs';
+            return $results;
+        }
+
+        // Lấy TẤT CẢ records roll_up của shop con cho ngày này
+        $table = $wpdb->prefix . 'roll_up';
+        $date_parts = explode('-', $date);
+        $year = intval($date_parts[0]);
+        $month = intval($date_parts[1]);
+        $day = intval($date_parts[2]);
+
+        $source_records = $wpdb->get_results($wpdb->prepare(
+            "SELECT * FROM {$table}
+             WHERE blog_id = %d
+             AND roll_up_year = %d
+             AND roll_up_month = %d
+             AND roll_up_day = %d",
+            $source_blog_id,
+            $year,
+            $month,
+            $day
+        ), ARRAY_A);
+
+        if (empty($source_records)) {
+            $results['message'] = 'No roll_up data found for source blog';
+            return $results;
+        }
+
+        // Sync từng record lên tất cả shop cha
+        $synced_count = 0;
+        foreach ($parent_ids as $parent_blog_id) {
+            $parent_blog_id = intval($parent_blog_id);
+
+            // Chuyển sang blog cha
+            switch_to_blog($parent_blog_id);
+
+            try {
+                foreach ($source_records as $record) {
+                    // Tạo data để sync lên cha (giữ nguyên blog_id của shop con)
+                    $parent_data = array(
+                        'blog_id' => $source_blog_id,  // Giữ nguyên blog_id của shop con
+                        // 'blog_name' => $record['blog_name'] ?? '',  // Giữ tên shop con
+                        'roll_up_date' => $record['roll_up_date'],
+                        'roll_up_day' => $record['roll_up_day'],
+                        'roll_up_month' => $record['roll_up_month'],
+                        'roll_up_year' => $record['roll_up_year'],
+                        'local_product_name_id' => $record['local_product_name_id'],
+                        // 'global_product_name_id' => $record['global_product_name_id'] ?? null,
+                        'amount' => $record['amount'],
+                        'quantity' => $record['quantity'],
+                        'type' => $record['type'],
+                    );
+
+                    // Sync meta (lot_ids) từ shop con
+                    if (!empty($record['meta'])) {
+                        $meta_data = json_decode($record['meta'], true);
+                        if (is_array($meta_data) && isset($meta_data['lot_ids']) && is_array($meta_data['lot_ids'])) {
+                            $parent_data['lot_ids'] = $meta_data['lot_ids'];
+                        }
+                    }
+
+                    // Ghi đè dữ liệu cũ (overwrite = true) thay vì cộng dồn
+                    // Lưu ý: lot_ids sẽ được merge trong save_roll_up()
+                    $roll_up_id = $this->calculator->save_roll_up($parent_data, true);
+
+                    if ($roll_up_id) {
+                        $synced_count++;
+                    }
+                }
+
+                $results['success'][] = array(
+                    'parent_blog_id' => $parent_blog_id,
+                    'records_synced' => count($source_records),
+                );
+
+            } catch (Exception $e) {
+                $results['failed'][] = array(
+                    'parent_blog_id' => $parent_blog_id,
+                    'error' => $e->getMessage(),
+                );
+            } finally {
+                restore_current_blog();
+            }
+        }
+
+        // Log kết quả
+        $results['total_synced'] = $synced_count;
+        $this->log_sync_result($source_blog_id, $results);
+
+        return $results;
+    }
+
+    /**
+     * Lọc ra các cha trực tiếp (không phải là cha của cha khác trong danh sách)
+     *
+     * Ví dụ 1: [B, C] → [B, C] (cả 2 đều là cha trực tiếp song song)
+     * Ví dụ 2: [B, HQ] và B.parent = [HQ] → [B] (HQ sẽ nhận từ B)
+     *
+     * @param array $parent_ids Danh sách parent_blog_ids
+     * @return array Danh sách cha trực tiếp
+     */
+    private function filter_direct_parents($parent_ids)
+    {
+        if (count($parent_ids) <= 1) {
+            return $parent_ids;
+        }
+
+        // Lấy danh sách tất cả cha-của-cha
+        $ancestors_of_parents = array();
+        foreach ($parent_ids as $parent_id) {
+            $parent_config = $this->database->get_config(intval($parent_id));
+            if ($parent_config && !empty($parent_config->parent_blog_ids)) {
+                $grandparents = is_array($parent_config->parent_blog_ids)
+                    ? $parent_config->parent_blog_ids
+                    : json_decode($parent_config->parent_blog_ids, true);
+                if (is_array($grandparents)) {
+                    $ancestors_of_parents = array_merge($ancestors_of_parents, $grandparents);
+                }
+            }
+        }
+        $ancestors_of_parents = array_unique(array_map('intval', $ancestors_of_parents));
+
+        // Lọc: giữ lại các cha KHÔNG nằm trong danh sách cha-của-cha
+        $direct_parents = array();
+        foreach ($parent_ids as $parent_id) {
+            if (!in_array(intval($parent_id), $ancestors_of_parents)) {
+                $direct_parents[] = intval($parent_id);
+            }
+        }
+
+        // Nếu tất cả đều bị lọc (edge case), giữ lại cha đầu tiên
+        if (empty($direct_parents)) {
+            $direct_parents = array(intval($parent_ids[0]));
+        }
+
+        return $direct_parents;
+    }
+
+    /**
+     * Sync dữ liệu lên một shop cha cụ thể
+     *
+     * @param int $source_blog_id Blog ID nguồn
+     * @param int $parent_blog_id Blog ID cha
+     * @param string $date Ngày
+     * @param object $source_roll_up Dữ liệu roll_up nguồn
+     * @return array Kết quả
+     */
+    private function sync_to_single_parent($source_blog_id, $parent_blog_id, $date, $source_roll_up)
+    {
+        global $wpdb;
+
+        // Kiểm tra blog cha có tồn tại không
+        if (!$this->blog_exists($parent_blog_id)) {
+            return array(
+                'success' => false,
+                'error' => 'Parent blog does not exist',
+            );
+        }
+
+        // Lấy included_blog_ids của source (bao gồm source + tất cả con/cháu của source)
+        $source_included_ids = $this->get_included_blog_ids($source_blog_id, $date);
+
+        // Chuyển sang blog cha để xử lý
+        switch_to_blog($parent_blog_id);
+
+        try {
+            // Lấy meta hiện tại của shop cha
+            $existing_meta = $this->get_existing_meta($parent_blog_id, $date);
+            $own_data = isset($existing_meta['own_data']) ? $existing_meta['own_data'] : array();
+            $existing_children = isset($existing_meta['children_summary']) ? $existing_meta['children_summary'] : array();
+
+            // Logic xử lý children_summary:
+            // 1. Nếu source đã có trong children → CẬP NHẬT entry đó
+            // 2. Nếu source bao gồm các child khác → XÓA các child đó (vì source đã bao gồm)
+            // 3. Nếu child khác bao gồm source → CẬP NHẬT child đó (trừ source ra) hoặc XÓA nếu source mới hơn
+
+            $cleaned_children = array();
+            $removed_children = array();
+            $updated_children = array();
+
+            foreach ($existing_children as $child_id => $child_data) {
+                // Bỏ qua nếu đây là chính source (sẽ được thêm/cập nhật sau)
+                if (intval($child_id) === intval($source_blog_id)) {
+                    continue;
+                }
+
+                $child_included_ids = isset($child_data['included_blog_ids'])
+                    ? array_map('intval', $child_data['included_blog_ids'])
+                    : array(intval($child_id));
+
+                // Case 1: Child này nằm trong included_ids của source
+                // → XÓA child (vì source đã bao gồm nó)
+                if (in_array(intval($child_id), $source_included_ids)) {
+                    $removed_children[] = $child_id;
+                    continue;
+                }
+
+                // Case 2: Child bao gồm source (source nằm trong child's included_ids)
+                // → Cần xử lý đặc biệt
+                if (in_array(intval($source_blog_id), $child_included_ids)) {
+                    // Child đã bao gồm source trước đó
+                    // So sánh thời gian để quyết định:
+                    // - Nếu source mới hơn: XÓA child, thêm source (source thắng)
+                    // - Trong thực tế, source luôn mới hơn vì đang sync ngay bây giờ
+                    $removed_children[] = $child_id;
+                    continue;
+                }
+
+                // Case 3: Kiểm tra overlap khác (child bao gồm bất kỳ ID nào mà source cũng bao gồm)
+                $overlap = array_intersect($child_included_ids, $source_included_ids);
+                if (!empty($overlap)) {
+                    // Có overlap → cần xử lý
+                    // Nếu child bao gồm nhiều ID hơn overlap → giữ child nhưng cần recalculate
+                    // Đơn giản: XÓA child, source sẽ thay thế phần overlap
+                    // Các phần khác của child sẽ được sync lại sau khi child đó chạy sync
+                    $removed_children[] = $child_id;
+                    continue;
+                }
+
+                // Không có overlap → giữ lại
+                $cleaned_children[$child_id] = $child_data;
+            }
+
+            // Thêm source mới vào danh sách
+            $children_data = $this->get_children_summary_from_cleaned(
+                $cleaned_children,
+                $source_blog_id,
+                $source_roll_up,
+                $source_included_ids
+            );
+
+            // Tính TỔNG = own_data + children_summary
+            $updated_data = $this->merge_roll_up_data($parent_blog_id, $date, $own_data, $children_data);
+
+            // Lưu roll_up mới
+            $roll_up_id = $this->calculator->save_roll_up($updated_data);
+
+            // Lưu metadata với cả own_data và children_summary
+            $this->save_parent_meta($roll_up_id, $parent_blog_id, $date, $own_data, $children_data);
+
+            restore_current_blog();
+
+            return array(
+                'success' => true,
+                'roll_up_id' => $roll_up_id,
+                'included_blog_ids' => $source_included_ids,
+                'removed_children' => $removed_children,
+                'kept_children' => array_keys($cleaned_children),
+            );
+        } catch (Exception $e) {
+            restore_current_blog();
+            return array(
+                'success' => false,
+                'error' => $e->getMessage(),
+            );
+        }
+    }
+
+    /**
+     * Tạo children_summary từ danh sách đã clean + source mới
+     *
+     * @param array $cleaned_children Children đã được clean (không có overlap)
+     * @param int $source_blog_id Blog ID nguồn
+     * @param object $source_roll_up Dữ liệu roll_up của nguồn
+     * @param array $source_included_ids Danh sách blog_ids mà source bao gồm
+     * @return array Children summary mới
+     */
+    private function get_children_summary_from_cleaned($cleaned_children, $source_blog_id, $source_roll_up, $source_included_ids)
+    {
+        // Bắt đầu với danh sách đã clean
+        $children = $cleaned_children;
+
+        // Thêm source mới
+        $children[$source_blog_id] = array(
+            'blog_id' => $source_blog_id,
+            'revenue_total' => $source_roll_up->revenue_total,
+            'revenue_strategic' => $source_roll_up->revenue_strategic_products,
+            'revenue_normal' => $source_roll_up->revenue_normal_products,
+            'count_sales_orders' => $source_roll_up->count_sales_orders,
+            'count_new_customers' => $source_roll_up->count_new_customers,
+            'inventory_total_quantity' => $source_roll_up->inventory_total_quantity,
+            'inventory_total_value' => $source_roll_up->inventory_total_value,
+            'included_blog_ids' => $source_included_ids,
+            'synced_at' => current_time('mysql'),
+        );
+
+        return $children;
+    }
+
+    /**
+     * Lấy danh sách tất cả blog_ids đã được bao gồm trong roll_up của một shop
+     * Bao gồm: chính nó + tất cả con/cháu (từ children_summary)
+     *
+     * @param int $blog_id Blog ID
+     * @param string $date Ngày
+     * @return array Danh sách blog_ids
+     */
+    private function get_included_blog_ids($blog_id, $date)
+    {
+        global $wpdb;
+
+        $original_blog = get_current_blog_id();
+
+        if ($blog_id != $original_blog) {
+            switch_to_blog($blog_id);
+        }
+
+        $meta_table = $wpdb->prefix . 'roll_up_meta';
+        $roll_up_table = $wpdb->prefix . 'roll_up';
+
+        $meta = $wpdb->get_row($wpdb->prepare(
+            "SELECT rm.children_summary
+             FROM {$meta_table} rm
+             INNER JOIN {$roll_up_table} r ON rm.roll_up_id = r.roll_up_id
+             WHERE r.blog_id = %d AND r.roll_up_date = %s",
+            $blog_id,
+            $date
+        ));
+
+        if ($blog_id != $original_blog) {
+            restore_current_blog();
+        }
+
+        // Bắt đầu với chính blog_id này
+        $included_ids = array($blog_id);
+
+        if ($meta && !empty($meta->children_summary)) {
+            $children = json_decode($meta->children_summary, true) ?? array();
+
+            foreach ($children as $child) {
+                // Nếu child có included_blog_ids, dùng nó
+                if (isset($child['included_blog_ids']) && is_array($child['included_blog_ids'])) {
+                    $included_ids = array_merge($included_ids, $child['included_blog_ids']);
+                } else {
+                    // Fallback: chỉ thêm blog_id của child
+                    if (isset($child['blog_id'])) {
+                        $included_ids[] = $child['blog_id'];
+                    }
+                }
+            }
+        }
+
+        return array_unique(array_map('intval', $included_ids));
+    }
+
+    /**
+     * Lấy meta hiện tại của shop
+     */
+    private function get_existing_meta($blog_id, $date)
+    {
+        global $wpdb;
+
+        $meta_table = $wpdb->prefix . 'roll_up_meta';
+        $roll_up_table = $wpdb->prefix . 'roll_up';
+
+        $meta = $wpdb->get_row($wpdb->prepare(
+            "SELECT rm.own_data, rm.children_summary
+             FROM {$meta_table} rm
+             INNER JOIN {$roll_up_table} r ON rm.roll_up_id = r.roll_up_id
+             WHERE r.blog_id = %d AND r.roll_up_date = %s",
+            $blog_id,
+            $date
+        ));
+
+        $result = array(
+            'own_data' => array(),
+            'children_summary' => array(),
+        );
+
+        if ($meta) {
+            if (!empty($meta->own_data)) {
+                $result['own_data'] = json_decode($meta->own_data, true) ?? array();
+            }
+            if (!empty($meta->children_summary)) {
+                $result['children_summary'] = json_decode($meta->children_summary, true) ?? array();
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Kiểm tra blog có tồn tại không
+     *
+     * @param int $blog_id Blog ID
+     * @return bool
+     */
+    private function blog_exists($blog_id)
+    {
+        global $wpdb;
+
+        if (!is_multisite()) {
+            return $blog_id == 1;
+        }
+
+        $blog = $wpdb->get_var($wpdb->prepare(
+            "SELECT blog_id FROM {$wpdb->blogs} WHERE blog_id = %d AND deleted = 0",
+            $blog_id
+        ));
+
+        return !empty($blog);
+    }
+
+    /**
+     * Merge dữ liệu từ các shop con
+     *
+     * @param int $parent_blog_id Blog ID cha
+     * @param string $date Ngày
+     * @param array $own_data Dữ liệu tự thân của shop cha
+     * @param array $children_data Dữ liệu các shop con
+     * @return array Dữ liệu roll_up đã merge
+     */
+    private function merge_roll_up_data($parent_blog_id, $date, $own_data, $children_data)
+    {
+        // Khởi tạo dữ liệu roll_up từ own_data (dữ liệu tự thân)
+        $merged = array(
+            'blog_id' => $parent_blog_id,
+            'roll_up_date' => $date,
+            'revenue_total' => floatval($own_data['revenue_total'] ?? 0),
+            'revenue_strategic_products' => floatval($own_data['revenue_strategic_products'] ?? 0),
+            'revenue_normal_products' => floatval($own_data['revenue_normal_products'] ?? 0),
+            'count_purchase_orders' => intval($own_data['count_purchase_orders'] ?? 0),
+            'count_sales_orders' => intval($own_data['count_sales_orders'] ?? 0),
+            'count_return_orders' => intval($own_data['count_return_orders'] ?? 0),
+            'count_damaged_orders' => intval($own_data['count_damaged_orders'] ?? 0),
+            'count_internal_import' => intval($own_data['count_internal_import'] ?? 0),
+            'count_internal_export' => intval($own_data['count_internal_export'] ?? 0),
+            'count_receipt_orders' => intval($own_data['count_receipt_orders'] ?? 0),
+            'count_payment_orders' => intval($own_data['count_payment_orders'] ?? 0),
+            'total_receipt_amount' => floatval($own_data['total_receipt_amount'] ?? 0),
+            'total_payment_amount' => floatval($own_data['total_payment_amount'] ?? 0),
+            'inventory_total_quantity' => floatval($own_data['inventory_total_quantity'] ?? 0),
+            'inventory_total_value' => floatval($own_data['inventory_total_value'] ?? 0),
+            'inventory_strategic_quantity' => floatval($own_data['inventory_strategic_quantity'] ?? 0),
+            'inventory_normal_quantity' => floatval($own_data['inventory_normal_quantity'] ?? 0),
+            'inventory_expiry_summary' => null,
+            'count_new_customers' => intval($own_data['count_new_customers'] ?? 0),
+            'count_returning_customers' => intval($own_data['count_returning_customers'] ?? 0),
+            'count_total_customers' => intval($own_data['count_total_customers'] ?? 0),
+            'avg_order_value' => 0,
+            'top_selling_products' => null,
+            'slow_moving_products' => null,
+            'created_at' => current_time('mysql'),
+            'updated_at' => current_time('mysql'),
+        );
+
+        // Cộng dồn từ các shop con
+        foreach ($children_data as $child) {
+            $merged['revenue_total'] += floatval($child['revenue_total'] ?? 0);
+            $merged['revenue_strategic_products'] += floatval($child['revenue_strategic'] ?? $child['revenue_strategic_products'] ?? 0);
+            $merged['revenue_normal_products'] += floatval($child['revenue_normal'] ?? $child['revenue_normal_products'] ?? 0);
+            $merged['count_sales_orders'] += intval($child['count_sales_orders'] ?? 0);
+            $merged['count_new_customers'] += intval($child['count_new_customers'] ?? 0);
+            $merged['inventory_total_quantity'] += floatval($child['inventory_total_quantity'] ?? 0);
+            $merged['inventory_total_value'] += floatval($child['inventory_total_value'] ?? 0);
+        }
+
+        // Tính giá trị đơn hàng trung bình
+        if ($merged['count_sales_orders'] > 0) {
+            $merged['avg_order_value'] = $merged['revenue_total'] / $merged['count_sales_orders'];
+        }
+
+        return $merged;
+    }
+
+    /**
+     * Lưu metadata cho shop cha
+     *
+     * @param int $roll_up_id Roll_up ID
+     * @param int $parent_blog_id Blog ID cha
+     * @param string $date Ngày
+     * @param array $own_data Dữ liệu tự thân
+     * @param array $children_data Dữ liệu các shop con
+     */
+    private function save_parent_meta($roll_up_id, $parent_blog_id, $date, $own_data, $children_data)
+    {
+        $meta_data = array(
+            'own_data' => $own_data,
+            'children_summary' => $children_data,
+            'sync_log' => array(
+                'last_sync' => current_time('mysql'),
+                'children_count' => count($children_data),
+                'children_ids' => array_keys($children_data),
+            ),
+        );
+
+        $this->calculator->save_roll_up_meta($roll_up_id, $parent_blog_id, $date, $meta_data);
+    }
+
+    /**
+     * Cập nhật thời gian sync cuối cùng
+     *
+     * @param int $blog_id Blog ID
+     * @param string $date Ngày
+     */
+    private function update_last_sync_time($blog_id, $date)
+    {
+        global $wpdb;
+
+        $table = $wpdb->prefix . 'roll_up';
+
+        $wpdb->update(
+            $table,
+            array('last_sync_at' => current_time('mysql')),
+            array(
+                'blog_id' => $blog_id,
+                'roll_up_date' => $date,
+            ),
+            array('%s'),
+            array('%d', '%s')
+        );
+    }
+
+    /**
+     * Log kết quả sync
+     *
+     * @param int $blog_id Blog ID
+     * @param array $results Kết quả sync
+     */
+    private function log_sync_result($blog_id, $results)
+    {
+        $log_option = 'tgs_sync_log_' . $blog_id;
+        $existing_logs = get_option($log_option, array());
+
+        // Giữ tối đa 100 log gần nhất
+        if (count($existing_logs) >= 100) {
+            array_shift($existing_logs);
+        }
+
+        $existing_logs[] = array(
+            'timestamp' => current_time('mysql'),
+            'date' => $results['date'],
+            'success_count' => count($results['success']),
+            'failed_count' => count($results['failed']),
+            'details' => $results,
+        );
+
+        update_option($log_option, $existing_logs);
+    }
+
+    /**
+     * Sync toàn bộ dữ liệu từ shop con lên các shop cha
+     * Dùng cho việc rebuild hoặc sync lần đầu
+     *
+     * @param int $source_blog_id Blog ID nguồn
+     * @param string $start_date Ngày bắt đầu
+     * @param string $end_date Ngày kết thúc
+     * @return array Kết quả sync
+     */
+    public function full_sync($source_blog_id, $start_date, $end_date)
+    {
+        $results = array(
+            'total_days' => 0,
+            'success_days' => 0,
+            'failed_days' => 0,
+            'details' => array(),
+        );
+
+        $current = strtotime($start_date);
+        $end = strtotime($end_date);
+
+        while ($current <= $end) {
+            $date = date('Y-m-d', $current);
+            $results['total_days']++;
+
+            $sync_result = $this->sync_to_parents($source_blog_id, $date);
+
+            if (empty($sync_result['failed'])) {
+                $results['success_days']++;
+            } else {
+                $results['failed_days']++;
+            }
+
+            $results['details'][$date] = $sync_result;
+
+            $current = strtotime('+1 day', $current);
+        }
+
+        return $results;
+    }
+
+    /**
+     * Lấy danh sách các shop con của một shop cha
+     *
+     * @param int $parent_blog_id Blog ID cha
+     * @return array Danh sách blog IDs
+     */
+    public function get_children_blogs($parent_blog_id)
+    {
+        global $wpdb;
+
+        $blogs = $this->database->get_all_blogs();
+        $children = array();
+
+        foreach ($blogs as $blog) {
+            // Chuyển sang blog đó để đọc config
+            switch_to_blog($blog->blog_id);
+
+            $config_table = $wpdb->prefix . 'sync_roll_up_config';
+
+            // Kiểm tra bảng config có tồn tại không
+            $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$config_table'");
+
+            if ($table_exists) {
+                $config = $wpdb->get_row(
+                    "SELECT parent_blog_ids FROM $config_table WHERE blog_id = " . intval($blog->blog_id)
+                );
+
+                if ($config && !empty($config->parent_blog_ids)) {
+                    $parent_ids = json_decode($config->parent_blog_ids, true);
+                    if (is_array($parent_ids) && in_array($parent_blog_id, $parent_ids)) {
+                        $children[] = $blog->blog_id;
+                    }
+                }
+            }
+
+            restore_current_blog();
+        }
+
+        return $children;
+    }
+
+    /**
+     * Aggregate dữ liệu từ tất cả shop con của một shop cha
+     *
+     * @param int $parent_blog_id Blog ID cha
+     * @param string $date Ngày
+     * @return array Dữ liệu aggregate
+     */
+    public function aggregate_children_data($parent_blog_id, $date)
+    {
+        $children_ids = $this->get_children_blogs($parent_blog_id);
+        $aggregated = array(
+            'total_revenue' => 0,
+            'total_strategic_revenue' => 0,
+            'total_normal_revenue' => 0,
+            'total_orders' => 0,
+            'total_new_customers' => 0,
+            'total_inventory_quantity' => 0,
+            'total_inventory_value' => 0,
+            'children_details' => array(),
+        );
+
+        foreach ($children_ids as $child_id) {
+            switch_to_blog($child_id);
+
+            $roll_up = $this->calculator->get_roll_up($child_id, $date);
+
+            if ($roll_up) {
+                $aggregated['total_revenue'] += floatval($roll_up->revenue_total);
+                $aggregated['total_strategic_revenue'] += floatval($roll_up->revenue_strategic_products);
+                $aggregated['total_normal_revenue'] += floatval($roll_up->revenue_normal_products);
+                $aggregated['total_orders'] += intval($roll_up->count_sales_orders);
+                $aggregated['total_new_customers'] += intval($roll_up->count_new_customers);
+                $aggregated['total_inventory_quantity'] += floatval($roll_up->inventory_total_quantity);
+                $aggregated['total_inventory_value'] += floatval($roll_up->inventory_total_value);
+
+                $aggregated['children_details'][$child_id] = array(
+                    'blog_id' => $child_id,
+                    'revenue' => $roll_up->revenue_total,
+                    'orders' => $roll_up->count_sales_orders,
+                    'new_customers' => $roll_up->count_new_customers,
+                );
+            }
+
+            restore_current_blog();
+        }
+
+        return $aggregated;
+    }
+
+    /**
+     * Kiểm tra trạng thái sync của các shop con
+     *
+     * @param int $parent_blog_id Blog ID cha
+     * @param string $date Ngày
+     * @return array Trạng thái sync
+     */
+    public function get_sync_status($parent_blog_id, $date)
+    {
+        switch_to_blog($parent_blog_id);
+
+        global $wpdb;
+
+        $meta_table = $wpdb->prefix . 'roll_up_meta';
+        $roll_up_table = $wpdb->prefix . 'roll_up';
+
+        $meta = $wpdb->get_row($wpdb->prepare(
+            "SELECT rm.children_summary, rm.sync_log, r.last_sync_at
+             FROM $meta_table rm
+             INNER JOIN $roll_up_table r ON rm.roll_up_id = r.roll_up_id
+             WHERE r.blog_id = %d AND r.roll_up_date = %s",
+            $parent_blog_id,
+            $date
+        ));
+
+        restore_current_blog();
+
+        if (!$meta) {
+            return array(
+                'has_data' => false,
+                'children_count' => 0,
+                'last_sync' => null,
+            );
+        }
+
+        $children = json_decode($meta->children_summary, true) ?? array();
+        $sync_log = json_decode($meta->sync_log, true) ?? array();
+
+        return array(
+            'has_data' => true,
+            'children_count' => count($children),
+            'children_ids' => array_keys($children),
+            'last_sync' => $meta->last_sync_at,
+            'sync_log' => $sync_log,
+        );
+    }
+
+    /**
+     * Trigger sync từ AJAX hoặc cron
+     *
+     * @param int $blog_id Blog ID
+     * @return array Kết quả sync
+     */
+    public function trigger_sync($blog_id = null)
+    {
+        if (!$blog_id) {
+            $blog_id = get_current_blog_id();
+        }
+
+        $today = current_time('Y-m-d');
+
+        // Tính roll_up cho ngày hôm nay (trả về array các records)
+        $roll_up_data = $this->calculator->calculate_daily_roll_up($blog_id, $today);
+
+        // Lưu từng record vào DB
+        $saved_ids = array();
+        foreach ($roll_up_data as $data) {
+            $roll_up_id = $this->calculator->save_roll_up($data);
+            if ($roll_up_id) {
+                $saved_ids[] = $roll_up_id;
+            }
+        }
+
+        error_log("Saved " . count($saved_ids) . " roll_up records for blog_id {$blog_id} on {$today}");
+        // Sync lên các shop cha
+        $sync_result = $this->sync_to_parents($blog_id, $today);
+
+        return array(
+            'blog_id' => $blog_id,
+            'date' => $today,
+            'saved_count' => count($saved_ids),
+            'saved_ids' => $saved_ids,
+            'sync_result' => $sync_result,
+        );
+    }
+
+    /**
+     * Lấy log sync gần đây
+     *
+     * @param int $blog_id Blog ID
+     * @param int $limit Số lượng log
+     * @return array Danh sách log
+     */
+    public function get_recent_sync_logs($blog_id, $limit = 10)
+    {
+        $log_option = 'tgs_sync_log_' . $blog_id;
+        $logs = get_option($log_option, array());
+
+        // Lấy các log gần nhất
+        $logs = array_slice($logs, -$limit);
+
+        return array_reverse($logs);
+    }
+
+    /**
+     * Xóa log sync cũ
+     *
+     * @param int $blog_id Blog ID
+     * @param int $days_to_keep Số ngày giữ lại
+     */
+    public function cleanup_old_logs($blog_id, $days_to_keep = 30)
+    {
+        $log_option = 'tgs_sync_log_' . $blog_id;
+        $logs = get_option($log_option, array());
+
+        $cutoff = strtotime("-{$days_to_keep} days");
+
+        $filtered_logs = array_filter($logs, function ($log) use ($cutoff) {
+            return strtotime($log['timestamp']) >= $cutoff;
+        });
+
+        update_option($log_option, array_values($filtered_logs));
+    }
+}

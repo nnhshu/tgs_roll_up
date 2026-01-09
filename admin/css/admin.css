@@ -1,0 +1,559 @@
+/**
+ * TGS Sync Roll Up - Admin CSS
+ *
+ * @package TGS_Sync_Roll_Up
+ */
+
+/* ========================================
+   General Styles
+   ======================================== */
+.tgs-sync-dashboard,
+.tgs-sync-settings,
+.tgs-sync-logs {
+    max-width: 100%;
+}
+
+/* ========================================
+   Panel / Card Styles
+   ======================================== */
+.tgs-panel {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-left: 4px solid #0073aa;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+    margin: 20px 0;
+    padding: 15px 20px;
+}
+
+.tgs-panel h2 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+/* ========================================
+   Status Cards
+   ======================================== */
+.tgs-status-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin: 20px 0;
+}
+
+.tgs-card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    display: flex;
+    align-items: center;
+    padding: 20px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.tgs-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.tgs-card-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 15px;
+}
+
+.tgs-card-icon .dashicons {
+    font-size: 30px;
+    width: 30px;
+    height: 30px;
+    color: #fff;
+}
+
+.tgs-card-primary .tgs-card-icon {
+    background: linear-gradient(135deg, #0073aa, #00a0d2);
+}
+
+.tgs-card-success .tgs-card-icon {
+    background: linear-gradient(135deg, #46b450, #7ad03a);
+}
+
+.tgs-card-info .tgs-card-icon {
+    background: linear-gradient(135deg, #00a0d2, #72aee6);
+}
+
+.tgs-card-warning .tgs-card-icon {
+    background: linear-gradient(135deg, #ffb900, #f0c33c);
+}
+
+.tgs-card-content h3 {
+    margin: 0 0 5px 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: #666;
+}
+
+.tgs-card-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #23282d;
+    margin: 0;
+}
+
+/* ========================================
+   Status Badges
+   ======================================== */
+.tgs-status-badge,
+.tgs-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.tgs-status-active,
+.tgs-badge-success {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.tgs-status-inactive,
+.tgs-badge-danger {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.tgs-badge-info {
+    background-color: #cce5ff;
+    color: #004085;
+}
+
+.tgs-badge-warning {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+/* ========================================
+   Charts Section
+   ======================================== */
+.tgs-charts-section {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 20px;
+    margin: 20px 0;
+}
+
+.tgs-chart-container {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 20px;
+}
+
+.tgs-chart-container h2 {
+    margin-top: 0;
+    font-size: 16px;
+}
+
+.tgs-chart-container canvas {
+    max-height: 300px;
+}
+
+/* ========================================
+   Grid Layout
+   ======================================== */
+.tgs-row {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0 -10px;
+}
+
+.tgs-col-3,
+.tgs-col-6 {
+    padding: 0 10px;
+    box-sizing: border-box;
+}
+
+.tgs-col-3 {
+    width: 25%;
+}
+
+.tgs-col-6 {
+    width: 50%;
+}
+
+@media (max-width: 1200px) {
+    .tgs-col-3 {
+        width: 50%;
+    }
+    
+    .tgs-col-6 {
+        width: 100%;
+    }
+}
+
+@media (max-width: 782px) {
+    .tgs-col-3,
+    .tgs-col-6 {
+        width: 100%;
+    }
+    
+    .tgs-charts-section {
+        grid-template-columns: 1fr;
+    }
+    
+    .tgs-status-cards {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ========================================
+   Quick Actions
+   ======================================== */
+.tgs-quick-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.tgs-quick-actions .button {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.tgs-quick-actions .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+
+/* ========================================
+   Info Table
+   ======================================== */
+.tgs-info-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.tgs-info-table td {
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.tgs-info-table tr:last-child td {
+    border-bottom: none;
+}
+
+/* ========================================
+   Roll-up Details
+   ======================================== */
+.tgs-roll-up-details ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.tgs-roll-up-details li {
+    padding: 5px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.tgs-roll-up-details li:last-child {
+    border-bottom: none;
+}
+
+.tgs-roll-up-details h4 {
+    margin-bottom: 10px;
+    color: #0073aa;
+}
+
+/* ========================================
+   Modal
+   ======================================== */
+.tgs-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tgs-modal-content {
+    background: #fff;
+    border-radius: 8px;
+    padding: 30px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.tgs-modal-content h3 {
+    margin-top: 0;
+}
+
+.tgs-modal-content label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+
+.tgs-modal-content input[type="date"] {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.tgs-modal-actions {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+/* ========================================
+   Messages
+   ======================================== */
+.tgs-message {
+    display: inline-block;
+    margin-left: 10px;
+    padding: 5px 10px;
+    border-radius: 4px;
+}
+
+.tgs-message.success {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.tgs-message.error {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+/* ========================================
+   Loading Spinner
+   ======================================== */
+.tgs-loading {
+    position: relative;
+}
+
+.tgs-loading::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #0073aa;
+    border-radius: 50%;
+    animation: tgs-spin 1s linear infinite;
+}
+
+@keyframes tgs-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* ========================================
+   Form Table Overrides
+   ======================================== */
+.tgs-sync-settings .form-table th {
+    width: 200px;
+}
+
+.tgs-sync-settings .form-table td {
+    padding: 15px 10px;
+}
+
+/* ========================================
+   Select2 Override (if used)
+   ======================================== */
+.tgs-select2 {
+    min-height: 100px;
+}
+
+/* ========================================
+   Button with Icon
+   ======================================== */
+.button .dashicons {
+    vertical-align: middle;
+    margin-right: 3px;
+    line-height: 1.4;
+}
+
+/* ========================================
+   Panel Variations
+   ======================================== */
+.tgs-panel-success {
+    border-left-color: #46b450;
+}
+
+.tgs-panel-warning {
+    border-left-color: #ffb900;
+}
+
+.tgs-panel-danger {
+    border-left-color: #dc3545;
+}
+
+.tgs-panel-danger h2 {
+    color: #dc3545;
+}
+
+/* ========================================
+   Code / Pre
+   ======================================== */
+.tgs-sync-settings code,
+.tgs-sync-logs code {
+    background-color: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+/* ========================================
+   Large Modal (Child Detail)
+   ======================================== */
+.tgs-modal-large {
+    max-width: 900px;
+    width: 95%;
+}
+
+.tgs-modal-large .tgs-modal-header {
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+}
+
+.tgs-modal-large .tgs-modal-header h2 {
+    margin: 0 0 5px 0;
+    color: #23282d;
+}
+
+.tgs-modal-large .tgs-modal-header .description {
+    margin: 0;
+    color: #666;
+}
+
+.tgs-modal-close {
+    position: absolute;
+    right: 20px;
+    top: 15px;
+    font-size: 28px;
+    font-weight: bold;
+    color: #999;
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+.tgs-modal-close:hover {
+    color: #d63638;
+}
+
+.tgs-modal-content {
+    position: relative;
+}
+
+/* ========================================
+   Breadcrumb Navigation
+   ======================================== */
+.tgs-breadcrumb {
+    background: #f0f0f1;
+    padding: 10px 15px;
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.tgs-breadcrumb-item {
+    color: #0073aa;
+    text-decoration: none;
+}
+
+.tgs-breadcrumb-item:hover {
+    color: #005a87;
+    text-decoration: underline;
+}
+
+.tgs-breadcrumb-separator {
+    color: #999;
+    margin: 0 5px;
+}
+
+.tgs-breadcrumb-current {
+    color: #23282d;
+    font-weight: 600;
+}
+
+/* ========================================
+   Child Detail Sections
+   ======================================== */
+.tgs-child-stats-section h3 {
+    margin: 0 0 15px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #23282d;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+    padding-bottom: 8px;
+}
+
+.tgs-child-stats-section h4 {
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    color: #0073aa;
+}
+
+.tgs-child-stats-section ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.tgs-child-stats-section li {
+    padding: 4px 0;
+    font-size: 13px;
+    border-bottom: 1px dashed #e0e0e0;
+}
+
+.tgs-child-stats-section li:last-child {
+    border-bottom: none;
+}
+
+/* Children table in modal */
+#tgs-child-children-section {
+    background: #f5fff5;
+    padding: 15px;
+    border-radius: 5px;
+    border-left: 3px solid #46b450;
+}
+
+#tgs-child-children-section h3 {
+    margin: 0 0 10px 0;
+    color: #46b450;
+}
+
+/* View child button */
+.tgs-view-child-detail {
+    white-space: nowrap;
+}
+
+.tgs-view-child-detail .dashicons {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    margin-right: 3px;
+}

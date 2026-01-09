@@ -1,0 +1,799 @@
+<?php
+/**
+ * Admin Page Class
+ * Quản lý trang admin cho plugin TGS Sync Roll Up
+ *
+ * @package TGS_Sync_Roll_Up
+ * @since 1.0.0
+ */
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+class TGS_Admin_Page
+{
+    /**
+     * Database instance
+     */
+    private $database;
+
+    /**
+     * Sync manager instance
+     */
+    private $sync_manager;
+
+    /**
+     * Cron handler instance
+     */
+    private $cron_handler;
+
+    /**
+     * Calculator instance
+     */
+    private $calculator;
+
+    /**
+     * Menu slug
+     */
+    const MENU_SLUG = 'tgs-sync-roll-up';
+
+    /**
+     * Constructor
+     */
+    public function __construct()
+    {
+        $this->database = new TGS_Sync_Roll_Up_Database();
+        $this->sync_manager = new TGS_Sync_Manager();
+        $this->cron_handler = new TGS_Cron_Handler();
+        $this->calculator = new TGS_Roll_Up_Calculator();
+
+        // Hooks
+        add_action('admin_menu', array($this, 'add_admin_menu'));
+        add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
+
+        // AJAX handlers
+        add_action('wp_ajax_tgs_save_sync_settings', array($this, 'ajax_save_settings'));
+        add_action('wp_ajax_tgs_manual_sync', array($this, 'ajax_manual_sync'));
+        add_action('wp_ajax_tgs_rebuild_rollup', array($this, 'ajax_rebuild_rollup'));
+        add_action('wp_ajax_tgs_get_sync_status', array($this, 'ajax_get_sync_status'));
+        add_action('wp_ajax_tgs_get_dashboard_data', array($this, 'ajax_get_dashboard_data'));
+        add_action('wp_ajax_tgs_get_stats_by_date', array($this, 'ajax_get_stats_by_date'));
+        add_action('wp_ajax_tgs_get_child_shop_detail', array($this, 'ajax_get_child_shop_detail'));
+    }
+
+    /**
+     * Thêm menu admin
+     */
+    public function add_admin_menu()
+    {
+        add_menu_page(
+            __('TGS Sync Roll Up', 'tgs-sync-roll-up'),
+            __('TGS Sync', 'tgs-sync-roll-up'),
+            'manage_options',
+            self::MENU_SLUG,
+            array($this, 'render_dashboard_page'),
+            'dashicons-update',
+            80
+        );
+
+        add_submenu_page(
+            self::MENU_SLUG,
+            __('Dashboard', 'tgs-sync-roll-up'),
+            __('Dashboard', 'tgs-sync-roll-up'),
+            'manage_options',
+            self::MENU_SLUG,
+            array($this, 'render_dashboard_page')
+        );
+
+        add_submenu_page(
+            self::MENU_SLUG,
+            __('Settings', 'tgs-sync-roll-up'),
+            __('Settings', 'tgs-sync-roll-up'),
+            'manage_options',
+            self::MENU_SLUG . '-settings',
+            array($this, 'render_settings_page')
+        );
+
+        add_submenu_page(
+            self::MENU_SLUG,
+            __('Logs', 'tgs-sync-roll-up'),
+            __('Logs', 'tgs-sync-roll-up'),
+            'manage_options',
+            self::MENU_SLUG . '-logs',
+            array($this, 'render_logs_page')
+        );
+    }
+
+    /**
+     * Enqueue admin assets
+     *
+     * @param string $hook Hook name
+     */
+    public function enqueue_admin_assets($hook)
+    {
+        // Chỉ load trên trang của plugin
+        if (strpos($hook, self::MENU_SLUG) === false) {
+            return;
+        }
+
+        // CSS
+        wp_enqueue_style(
+            'tgs-sync-roll-up-admin',
+            TGS_SYNC_ROLL_UP_URL . 'admin/css/admin.css',
+            array(),
+            TGS_SYNC_ROLL_UP_VERSION
+        );
+
+        // JS
+        wp_enqueue_script(
+            'tgs-sync-roll-up-admin',
+            TGS_SYNC_ROLL_UP_URL . 'admin/js/admin.js',
+            array('jquery'),
+            TGS_SYNC_ROLL_UP_VERSION,
+            true
+        );
+
+        // Lấy thông tin hierarchy của tất cả shops
+        $shop_hierarchy = $this->get_shop_hierarchy();
+
+        // Localize script
+        wp_localize_script('tgs-sync-roll-up-admin', 'tgsSyncRollUp', array(
+            'ajaxUrl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('tgs_sync_roll_up_nonce'),
+            'currentBlogId' => get_current_blog_id(),
+            'shopHierarchy' => $shop_hierarchy,
+            'i18n' => array(
+                'saving' => __('Saving...', 'tgs-sync-roll-up'),
+                'saved' => __('Settings saved!', 'tgs-sync-roll-up'),
+                'error' => __('An error occurred', 'tgs-sync-roll-up'),
+                'syncing' => __('Syncing...', 'tgs-sync-roll-up'),
+                'syncComplete' => __('Sync complete!', 'tgs-sync-roll-up'),
+                'rebuilding' => __('Rebuilding...', 'tgs-sync-roll-up'),
+                'rebuildComplete' => __('Rebuild complete!', 'tgs-sync-roll-up'),
+                'confirmRebuild' => __('Are you sure you want to rebuild roll_up data? This may take a while.', 'tgs-sync-roll-up'),
+                'parentDisabledReason' => __('Shop này đã là cha của shop cha khác. Dữ liệu sẽ tự động đẩy lên qua trung gian.', 'tgs-sync-roll-up'),
+            ),
+        ));
+
+        // Chart.js for dashboard
+        if ($hook === 'toplevel_page_' . self::MENU_SLUG) {
+            wp_enqueue_script(
+                'chartjs',
+                'https://cdn.jsdelivr.net/npm/chart.js',
+                array(),
+                '4.4.1',
+                true
+            );
+        }
+    }
+
+    /**
+     * Render dashboard page
+     */
+    public function render_dashboard_page()
+    {
+        $blog_id = get_current_blog_id();
+        $config = $this->database->get_config($blog_id);
+        $sync_status = $this->database->get_sync_status($blog_id);
+        $cron_info = $this->cron_handler->get_next_scheduled();
+        $recent_logs = $this->sync_manager->get_recent_sync_logs($blog_id, 5);
+
+        // Lấy dữ liệu roll_up
+        $today = current_time('Y-m-d');
+        error_log('=== FETCH DASHBOARD DATA ===');
+        error_log($today);
+
+        // Tính tổng doanh thu hôm nay từ bảng roll_up
+        $today_total_revenue = $this->calculator->get_total_revenue_sum($blog_id, $today, $today);
+
+        // Lấy danh sách blogs để hiển thị tên shop con
+        $all_blogs = $this->database->get_all_blogs();
+
+        // Lấy roll_up 7 ngày gần đây cho biểu đồ
+        $chart_data = $this->get_chart_data($blog_id, 7);
+
+        // Tìm các shop con đang cấu hình sync lên shop này
+        $shops_syncing_to_me = $this->get_child_shops($blog_id);
+
+        error_log('=== RENDER DASHBOARD PAGE ===');
+        error_log('Current blog_id: ' . $blog_id);
+        error_log('Today: ' . $today);
+        error_log('Today total revenue: ' . $today_total_revenue);
+        error_log('Chart data count: ' . count($chart_data));
+        error_log('Shops syncing to me: ' . json_encode($shops_syncing_to_me));
+
+        include TGS_SYNC_ROLL_UP_PATH . 'admin/views/dashboard.php';
+    }
+
+    /**
+     * Render settings page
+     */
+    public function render_settings_page()
+    {
+        $blog_id = get_current_blog_id();
+        $config = $this->database->get_config($blog_id);
+        $all_blogs = $this->database->get_all_blogs();
+        $cron_info = $this->cron_handler->get_next_scheduled();
+
+        // Lấy danh sách shop cha đã cấu hình (đã được decode trong get_config)
+        $parent_blog_ids = array();
+        if ($config && !empty($config->parent_blog_ids)) {
+            // parent_blog_ids đã là array từ get_config()
+            $parent_blog_ids = is_array($config->parent_blog_ids)
+                ? $config->parent_blog_ids
+                : (json_decode($config->parent_blog_ids, true) ?? array());
+        }
+
+        // Lấy hierarchy để hiển thị cây phân cấp
+        $shop_hierarchy = $this->get_shop_hierarchy();
+
+        // Tạo map blog_id => blog_name để hiển thị
+        $blog_names = array();
+        foreach ($all_blogs as $blog) {
+            $blog_names[intval($blog->blog_id)] = self::get_blog_name($blog->blog_id);
+        }
+
+        // Xây dựng cây phân cấp (tìm root nodes và children)
+        $hierarchy_tree = $this->build_hierarchy_tree($shop_hierarchy, $blog_names);
+
+        include TGS_SYNC_ROLL_UP_PATH . 'admin/views/settings-page.php';
+    }
+
+    /**
+     * Xây dựng cây phân cấp từ hierarchy data
+     *
+     * @param array $hierarchy Map blog_id => [parent_ids]
+     * @param array $blog_names Map blog_id => blog_name
+     * @return array Hierarchy tree structure
+     */
+    private function build_hierarchy_tree($hierarchy, $blog_names)
+    {
+        // Tìm children của mỗi node (đảo ngược quan hệ parent)
+        $children = array();
+        $all_children = array(); // Tất cả blog_ids đã là con của ai đó
+
+        foreach ($hierarchy as $blog_id => $parent_ids) {
+            foreach ($parent_ids as $parent_id) {
+                if (!isset($children[$parent_id])) {
+                    $children[$parent_id] = array();
+                }
+                if (!in_array($blog_id, $children[$parent_id])) {
+                    $children[$parent_id][] = $blog_id;
+                }
+                $all_children[] = $blog_id;
+            }
+        }
+        $all_children = array_unique($all_children);
+
+        // Root nodes = blogs không có cha (parent_ids rỗng)
+        // VÀ không là con của ai trong hierarchy
+        $root_nodes = array();
+        foreach ($hierarchy as $blog_id => $parent_ids) {
+            if (empty($parent_ids)) {
+                $root_nodes[] = $blog_id;
+            }
+        }
+
+        // Đảm bảo root_nodes không chứa blogs đã là con của root khác
+        // (trường hợp này không nên xảy ra nếu data đúng, nhưng để safe)
+        $root_nodes = array_values(array_diff($root_nodes, $all_children));
+
+        // Nếu không có root node, có thể có cycle hoặc tất cả đều có cha
+        // Fallback: lấy blogs có cha không tồn tại trong hierarchy
+        if (empty($root_nodes)) {
+            foreach ($hierarchy as $blog_id => $parent_ids) {
+                $has_valid_parent = false;
+                foreach ($parent_ids as $parent_id) {
+                    if (isset($hierarchy[$parent_id])) {
+                        $has_valid_parent = true;
+                        break;
+                    }
+                }
+                if (!$has_valid_parent) {
+                    $root_nodes[] = $blog_id;
+                }
+            }
+        }
+
+        // Final fallback: lấy tất cả blogs không là con của ai
+        if (empty($root_nodes)) {
+            $root_nodes = array_values(array_diff(array_keys($hierarchy), $all_children));
+        }
+
+        // Ultimate fallback
+        if (empty($root_nodes)) {
+            $root_nodes = array_keys($hierarchy);
+        }
+
+        return array(
+            'hierarchy' => $hierarchy,
+            'children' => $children,
+            'root_nodes' => $root_nodes,
+            'blog_names' => $blog_names,
+        );
+    }
+
+    /**
+     * Render logs page
+     */
+    public function render_logs_page()
+    {
+        $blog_id = get_current_blog_id();
+        $sync_logs = $this->sync_manager->get_recent_sync_logs($blog_id, 50);
+        $cron_logs = $this->cron_handler->get_recent_cron_logs(50);
+
+        include TGS_SYNC_ROLL_UP_PATH . 'admin/views/logs-page.php';
+    }
+
+    /**
+     * AJAX: Save settings
+     */
+    public function ajax_save_settings()
+    {
+        check_ajax_referer('tgs_sync_roll_up_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $blog_id = get_current_blog_id();
+
+        // Lấy dữ liệu từ request
+        $parent_blog_ids = isset($_POST['parent_blog_ids']) ? array_map('intval', $_POST['parent_blog_ids']) : array();
+        $sync_enabled = isset($_POST['sync_enabled']) ? intval($_POST['sync_enabled']) : 0;
+        $sync_frequency = isset($_POST['sync_frequency']) ? sanitize_text_field($_POST['sync_frequency']) : 'hourly';
+
+        // Lưu config - parent_blog_ids là array, save_config sẽ json_encode
+        $config_data = array(
+            'parent_blog_ids' => $parent_blog_ids,
+            'sync_enabled' => $sync_enabled,
+            'sync_interval' => $sync_frequency,
+        );
+
+        $result = $this->database->save_config($config_data, $blog_id);
+
+        if ($result) {
+            // Cập nhật cron frequency nếu thay đổi
+            $this->cron_handler->update_cron_frequency($sync_frequency);
+
+            wp_send_json_success(array(
+                'message' => __('Settings saved successfully!', 'tgs-sync-roll-up'),
+            ));
+        } else {
+            wp_send_json_error(array(
+                'message' => __('Failed to save settings', 'tgs-sync-roll-up'),
+            ));
+        }
+    }
+
+    /**
+     * AJAX: Manual sync
+     */
+    public function ajax_manual_sync()
+    {
+        check_ajax_referer('tgs_sync_roll_up_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $blog_id = get_current_blog_id();
+        $date = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : current_time('Y-m-d');
+
+        try {
+            $result = $this->cron_handler->sync_specific_date($blog_id, $date);
+
+            wp_send_json_success(array(
+                'message' => __('Sync completed!', 'tgs-sync-roll-up'),
+                'result' => $result,
+            ));
+        } catch (Exception $e) {
+            wp_send_json_error(array(
+                'message' => $e->getMessage(),
+            ));
+        }
+    }
+
+    /**
+     * AJAX: Rebuild roll_up
+     */
+    public function ajax_rebuild_rollup()
+    {
+        check_ajax_referer('tgs_sync_roll_up_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $blog_id = get_current_blog_id();
+        $start_date = isset($_POST['start_date']) ? sanitize_text_field($_POST['start_date']) : date('Y-m-01');
+        $end_date = isset($_POST['end_date']) ? sanitize_text_field($_POST['end_date']) : current_time('Y-m-d');
+        $sync_to_parents = isset($_POST['sync_to_parents']) ? (bool) $_POST['sync_to_parents'] : true;
+
+        try {
+            $result = $this->cron_handler->rebuild_date_range($blog_id, $start_date, $end_date, $sync_to_parents);
+
+            wp_send_json_success(array(
+                'message' => sprintf(
+                    __('Rebuild completed! %d/%d days processed.', 'tgs-sync-roll-up'),
+                    $result['success'],
+                    $result['total']
+                ),
+                'result' => $result,
+            ));
+        } catch (Exception $e) {
+            wp_send_json_error(array(
+                'message' => $e->getMessage(),
+            ));
+        }
+    }
+
+    /**
+     * AJAX: Get sync status
+     */
+    public function ajax_get_sync_status()
+    {
+        check_ajax_referer('tgs_sync_roll_up_nonce', 'nonce');
+
+        $blog_id = get_current_blog_id();
+        $status = $this->database->get_sync_status($blog_id);
+        $cron_info = $this->cron_handler->get_next_scheduled();
+
+        wp_send_json_success(array(
+            'status' => $status,
+            'cron' => $cron_info,
+        ));
+    }
+
+    /**
+     * AJAX: Get dashboard data
+     */
+    public function ajax_get_dashboard_data()
+    {
+        check_ajax_referer('tgs_sync_roll_up_nonce', 'nonce');
+
+        $blog_id = get_current_blog_id();
+        $days = isset($_GET['days']) ? intval($_GET['days']) : 7;
+
+        $chart_data = $this->get_chart_data($blog_id, $days);
+        $today_roll_up = $this->calculator->get_roll_up($blog_id, current_time('Y-m-d'));
+
+        wp_send_json_success(array(
+            'chart_data' => $chart_data,
+            'today' => $today_roll_up,
+        ));
+    }
+
+    /**
+     * AJAX: Get stats by date range
+     */
+    public function ajax_get_stats_by_date()
+    {
+        check_ajax_referer('tgs_sync_nonce', 'nonce');
+
+        $blog_id = get_current_blog_id();
+        $from_date = isset($_POST['from_date']) ? sanitize_text_field($_POST['from_date']) : current_time('Y-m-d');
+        $to_date = isset($_POST['to_date']) ? sanitize_text_field($_POST['to_date']) : current_time('Y-m-d');
+
+        // Validate dates
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from_date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to_date)) {
+            wp_send_json_error('Invalid date format');
+        }
+
+        // Get aggregated stats
+        $stats = $this->calculator->get_stats_by_date_range($blog_id, $from_date, $to_date);
+
+        if ($stats) {
+            wp_send_json_success($stats);
+        } else {
+            // Return empty stats
+            wp_send_json_success(array(
+                'revenue_total' => 0,
+                'revenue_strategic_products' => 0,
+                'revenue_normal_products' => 0,
+                'count_sales_orders' => 0,
+                'count_purchase_orders' => 0,
+                'count_return_orders' => 0,
+                'count_internal_import' => 0,
+                'count_internal_export' => 0,
+                'inventory_total_quantity' => 0,
+                'inventory_total_value' => 0,
+                'count_new_customers' => 0,
+                'count_returning_customers' => 0,
+                'count_total_customers' => 0,
+                'avg_order_value' => 0,
+            ));
+        }
+    }
+
+    /**
+     * AJAX: Get child shop detail
+     * Lấy chi tiết thống kê của một shop con (bao gồm cả children_summary của nó nếu có)
+     */
+    public function ajax_get_child_shop_detail()
+    {
+        check_ajax_referer('tgs_sync_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $child_blog_id = isset($_POST['child_blog_id']) ? intval($_POST['child_blog_id']) : 0;
+        $date = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : current_time('Y-m-d');
+
+        if (!$child_blog_id) {
+            wp_send_json_error(array('message' => 'Invalid blog ID'));
+        }
+
+        // Validate date
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            wp_send_json_error(array('message' => 'Invalid date format'));
+        }
+
+        // Lấy thông tin blog
+        $blog_details = get_blog_details($child_blog_id);
+        if (!$blog_details) {
+            wp_send_json_error(array('message' => 'Blog not found'));
+        }
+
+        // Lấy tổng revenue của shop con từ bảng roll_up
+        switch_to_blog($child_blog_id);
+        $total_revenue = $this->calculator->get_total_revenue_sum($child_blog_id, $date, $date);
+        restore_current_blog();
+
+        // Lấy URL dashboard của shop con
+        $child_admin_url = get_admin_url($child_blog_id, 'admin.php?page=tgs-sync-roll-up');
+
+        // Lấy các shop con của shop này (nếu có)
+        $child_shops = $this->get_child_shops($child_blog_id);
+
+        wp_send_json_success(array(
+            'blog_id' => $child_blog_id,
+            'shop_name' => $blog_details->blogname ?: $blog_details->domain . $blog_details->path,
+            'admin_url' => $child_admin_url,
+            'date' => $date,
+            'total_revenue' => $total_revenue,
+            'child_shops' => $child_shops,
+            'has_children' => !empty($child_shops),
+        ));
+    }
+
+    /**
+     * Lấy dữ liệu cho biểu đồ
+     *
+     * @param int $blog_id Blog ID
+     * @param int $days Số ngày
+     * @return array Chart data
+     */
+    private function get_chart_data($blog_id, $days)
+    {
+        global $wpdb;
+
+        $table = $wpdb->prefix . 'roll_up';
+        $end_date = current_time('Y-m-d');
+        $start_date = date('Y-m-d', strtotime("-{$days} days"));
+
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT
+                roll_up_date,
+                COALESCE(SUM(CASE WHEN type = %d THEN amount ELSE 0 END), 0) -
+                COALESCE(SUM(CASE WHEN type = %d THEN amount ELSE 0 END), 0) as total_revenue
+             FROM {$table}
+             WHERE blog_id = %d
+             AND roll_up_date BETWEEN %s AND %s
+             GROUP BY roll_up_date
+             ORDER BY roll_up_date ASC",
+            TGS_LEDGER_TYPE_SALES,
+            TGS_LEDGER_TYPE_RETURN,
+            $blog_id,
+            $start_date,
+            $end_date
+        ));
+
+        $labels = array();
+        $revenue = array();
+
+        // Tạo mảng đầy đủ các ngày
+        $current = strtotime($start_date);
+        $end = strtotime($end_date);
+        $data_by_date = array();
+
+        foreach ($results as $row) {
+            $data_by_date[$row->roll_up_date] = $row;
+        }
+
+        while ($current <= $end) {
+            $date = date('Y-m-d', $current);
+            $labels[] = date('d/m', $current);
+
+            if (isset($data_by_date[$date])) {
+                $revenue[] = floatval($data_by_date[$date]->total_revenue);
+            } else {
+                $revenue[] = 0;
+            }
+
+            $current = strtotime('+1 day', $current);
+        }
+
+        return array(
+            'labels' => $labels,
+            'datasets' => array(
+                'revenue' => $revenue,
+            ),
+            'totals' => array(
+                'revenue' => array_sum($revenue),
+            ),
+        );
+    }
+
+    /**
+     * Format số tiền
+     *
+     * @param float $amount Số tiền
+     * @return string Số tiền đã format
+     */
+    public static function format_currency($amount)
+    {
+        return number_format($amount, 0, ',', '.') . ' đ';
+    }
+
+    /**
+     * Format số
+     *
+     * @param float $number Số
+     * @return string Số đã format
+     */
+    public static function format_number($number)
+    {
+        return number_format($number, 0, ',', '.');
+    }
+
+    /**
+     * Format thời gian
+     *
+     * @param string $datetime Datetime string
+     * @return string Thời gian đã format
+     */
+    public static function format_datetime($datetime)
+    {
+        if (empty($datetime)) {
+            return '-';
+        }
+        return date_i18n('d/m/Y H:i:s', strtotime($datetime));
+    }
+
+    /**
+     * Lấy thông tin hierarchy của tất cả shops
+     * Trả về array: blog_id => array parents
+     *
+     * @return array Shop hierarchy
+     */
+    private function get_shop_hierarchy()
+    {
+        global $wpdb;
+
+        $hierarchy = array();
+        $all_blogs = $this->database->get_all_blogs();
+        $original_blog = get_current_blog_id();
+
+        foreach ($all_blogs as $blog) {
+            $blog_id = intval($blog->blog_id);
+            $parent_ids = array();
+
+            // Switch sang blog để đọc config từ bảng của blog đó
+            if ($blog_id != $original_blog) {
+                switch_to_blog($blog_id);
+            }
+
+            // Đọc trực tiếp từ bảng config của blog hiện tại
+            $config_table = $wpdb->prefix . 'sync_roll_up_config';
+            $table_exists = $wpdb->get_var("SHOW TABLES LIKE '{$config_table}'");
+
+            if ($table_exists) {
+                $config = $wpdb->get_row($wpdb->prepare(
+                    "SELECT parent_blog_ids FROM {$config_table} WHERE blog_id = %d",
+                    $blog_id
+                ));
+
+                if ($config && !empty($config->parent_blog_ids)) {
+                    $decoded = json_decode($config->parent_blog_ids, true);
+                    if (is_array($decoded)) {
+                        $parent_ids = $decoded;
+                    }
+                }
+            }
+
+            if ($blog_id != $original_blog) {
+                restore_current_blog();
+            }
+
+            $hierarchy[$blog_id] = array_map('intval', $parent_ids);
+        }
+
+        return $hierarchy;
+    }
+
+    /**
+     * Lấy danh sách các shop con đang cấu hình sync lên shop cha
+     *
+     * @param int $parent_blog_id Blog ID của shop cha
+     * @return array Mảng chứa thông tin các shop con
+     */
+    private function get_child_shops($parent_blog_id)
+    {
+        global $wpdb;
+
+        $shops_syncing_to_me = array();
+        $all_blogs = get_sites();
+
+        // Build UNION query to check all config tables at once
+        $union_queries = array();
+        $blog_info = array(); // Store blog_id => blog_name mapping
+
+        foreach ($all_blogs as $blog) {
+            $bid = $blog->blog_id;
+            if ($bid == $parent_blog_id) continue;
+
+            // Build table name for this blog
+            $table_prefix = $wpdb->get_blog_prefix($bid);
+            $config_table = $table_prefix . 'sync_roll_up_config';
+
+            // Store blog name for later use
+            $blog_info[$bid] = $blog->blogname;
+
+            // Add to UNION query
+            $union_queries[] = $wpdb->prepare(
+                "SELECT %d as blog_id, parent_blog_ids
+                FROM {$config_table}
+                WHERE blog_id = %d
+                AND parent_blog_ids IS NOT NULL
+                AND parent_blog_ids != ''",
+                $bid,
+                $bid
+            );
+        }
+
+        if (empty($union_queries)) {
+            return $shops_syncing_to_me;
+        }
+
+        // Execute single UNION query to get all configs at once
+        $union_sql = implode(' UNION ALL ', $union_queries);
+        $results = $wpdb->get_results($union_sql);
+
+        // Filter results to find shops syncing to this parent
+        foreach ($results as $row) {
+            if (!empty($row->parent_blog_ids)) {
+                $pids = json_decode($row->parent_blog_ids, true);
+                if (is_array($pids) && in_array($parent_blog_id, $pids)) {
+                    $shops_syncing_to_me[] = array(
+                        'blog_id' => $row->blog_id,
+                        'blog_name' => isset($blog_info[$row->blog_id]) ? $blog_info[$row->blog_id] : 'Unknown'
+                    );
+                }
+            }
+        }
+
+        return $shops_syncing_to_me;
+    }
+
+    /**
+     * Lấy tên blog
+     *
+     * @param int $blog_id Blog ID
+     * @return string Tên blog
+     */
+    public static function get_blog_name($blog_id)
+    {
+        if (!is_multisite()) {
+            return get_bloginfo('name');
+        }
+
+        switch_to_blog($blog_id);
+        $name = get_bloginfo('name');
+        restore_current_blog();
+
+        return $name;
+    }
+}
