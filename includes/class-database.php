@@ -191,6 +191,7 @@ class TGS_Sync_Roll_Up_Database
 
     /**
      * Save config for current blog
+     * CHỈ cập nhật những field được truyền vào $data
      */
     public function save_config($data, $blog_id = null)
     {
@@ -207,30 +208,69 @@ class TGS_Sync_Roll_Up_Database
             )
         );
 
-        // Handle parent_blog_id - single parent only
-        $parent_id = null;
-        if (isset($data['parent_blog_id']) && !empty($data['parent_blog_id'])) {
-            $parent_id = intval($data['parent_blog_id']);
-        }
-
+        // Xây dựng save_data CHỈ với những field được cung cấp
         $save_data = array(
-            'blog_id'           => $blog_id,
-            'parent_blog_id'    => $parent_id,
-            'approval_status'   => isset($data['approval_status']) ? $data['approval_status'] : null,
-            'sync_interval'     => isset($data['sync_interval']) ? $data['sync_interval'] : 'hourly',
-            'sync_enabled'      => isset($data['sync_enabled']) ? intval($data['sync_enabled']) : 1,
-            'auto_rollup_daily' => isset($data['auto_rollup_daily']) ? intval($data['auto_rollup_daily']) : 1,
-            'updated_at'        => current_time('mysql'),
+            'updated_at' => current_time('mysql'),
         );
 
+        // Handle parent_blog_id - cho phép set null
+        if (isset($data['parent_blog_id'])) {
+            if ($data['parent_blog_id'] === null || $data['parent_blog_id'] === '') {
+                $save_data['parent_blog_id'] = null;
+            } else {
+                $save_data['parent_blog_id'] = intval($data['parent_blog_id']);
+            }
+        }
+
+        // Handle approval_status - cho phép set null
+        if (isset($data['approval_status'])) {
+            $save_data['approval_status'] = $data['approval_status'];
+        }
+
+        // Handle sync_interval
+        if (isset($data['sync_interval'])) {
+            $save_data['sync_interval'] = $data['sync_interval'];
+        }
+
+        // Handle sync_enabled
+        if (isset($data['sync_enabled'])) {
+            $save_data['sync_enabled'] = intval($data['sync_enabled']);
+        }
+
+        // Handle auto_rollup_daily
+        if (isset($data['auto_rollup_daily'])) {
+            $save_data['auto_rollup_daily'] = intval($data['auto_rollup_daily']);
+        }
+
         if ($existing) {
+            // Update existing record
             return $wpdb->update(
                 $this->config_table,
                 $save_data,
                 array('config_id' => $existing)
             );
         } else {
+            // Insert new record - cần có blog_id và các giá trị mặc định
+            $save_data['blog_id'] = $blog_id;
             $save_data['created_at'] = current_time('mysql');
+
+            // Set default values cho insert nếu chưa có
+            if (!isset($save_data['parent_blog_id'])) {
+                $save_data['parent_blog_id'] = null;
+            }
+            if (!isset($save_data['approval_status'])) {
+                $save_data['approval_status'] = null;
+            }
+            if (!isset($save_data['sync_interval'])) {
+                $save_data['sync_interval'] = 'hourly';
+            }
+            if (!isset($save_data['sync_enabled'])) {
+                $save_data['sync_enabled'] = 1;
+            }
+            if (!isset($save_data['auto_rollup_daily'])) {
+                $save_data['auto_rollup_daily'] = 1;
+            }
+
             return $wpdb->insert($this->config_table, $save_data);
         }
     }

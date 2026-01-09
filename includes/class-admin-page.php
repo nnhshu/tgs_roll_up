@@ -55,6 +55,8 @@ class TGS_Admin_Page
         // AJAX handlers
         add_action('wp_ajax_tgs_save_parent_shop', array($this, 'ajax_save_parent_shop'));
         add_action('wp_ajax_tgs_cancel_parent_request', array($this, 'ajax_cancel_parent_request'));
+        add_action('wp_ajax_tgs_approve_parent_request', array($this, 'ajax_approve_parent_request'));
+        add_action('wp_ajax_tgs_reject_parent_request', array($this, 'ajax_reject_parent_request'));
         add_action('wp_ajax_tgs_save_sync_settings', array($this, 'ajax_save_settings'));
         add_action('wp_ajax_tgs_manual_sync', array($this, 'ajax_manual_sync'));
         add_action('wp_ajax_tgs_rebuild_rollup', array($this, 'ajax_rebuild_rollup'));
@@ -198,12 +200,16 @@ class TGS_Admin_Page
         // Tìm các shop con đang cấu hình sync lên shop này
         $shops_syncing_to_me = $this->get_child_shops($blog_id);
 
+        // Lấy danh sách yêu cầu đang chờ approve
+        $pending_requests = $this->get_pending_child_requests($blog_id);
+
         error_log('=== RENDER DASHBOARD PAGE ===');
         error_log('Current blog_id: ' . $blog_id);
         error_log('Today: ' . $today);
         error_log('Today total revenue: ' . $today_total_revenue);
         error_log('Chart data count: ' . count($chart_data));
         error_log('Shops syncing to me: ' . json_encode($shops_syncing_to_me));
+        error_log('Pending requests: ' . json_encode($pending_requests));
 
         include TGS_SYNC_ROLL_UP_PATH . 'admin/views/dashboard.php';
     }
@@ -413,6 +419,109 @@ class TGS_Admin_Page
         } else {
             wp_send_json_error(array(
                 'message' => __('Lỗi khi hủy yêu cầu', 'tgs-sync-roll-up'),
+            ));
+        }
+    }
+
+    /**
+     * AJAX: Approve parent request (shop cha approve yêu cầu)
+     */
+    public function ajax_approve_parent_request()
+    {
+        check_ajax_referer('tgs_sync_roll_up_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $child_blog_id = isset($_POST['child_blog_id']) ? intval($_POST['child_blog_id']) : 0;
+
+        if (!$child_blog_id) {
+            wp_send_json_error(array(
+                'message' => __('ID shop con không hợp lệ!', 'tgs-sync-roll-up'),
+            ));
+        }
+
+        $parent_blog_id = get_current_blog_id();
+
+        // Lấy config của shop con
+        $child_config = $this->database->get_config($child_blog_id);
+
+        // Validate: shop con phải có yêu cầu pending với shop cha này
+        if (empty($child_config->approval_status) ||
+            $child_config->approval_status !== 'pending' ||
+            $child_config->parent_blog_id != $parent_blog_id) {
+            wp_send_json_error(array(
+                'message' => __('Yêu cầu không hợp lệ hoặc đã hết hạn!', 'tgs-sync-roll-up'),
+            ));
+        }
+
+        // Cập nhật trạng thái thành approved
+        $config_data = array(
+            'approval_status' => 'approved',
+        );
+
+        $result = $this->database->save_config($config_data, $child_blog_id);
+
+        if ($result !== false) {
+            wp_send_json_success(array(
+                'message' => __('Đã chấp nhận yêu cầu từ shop con!', 'tgs-sync-roll-up'),
+            ));
+        } else {
+            wp_send_json_error(array(
+                'message' => __('Lỗi khi cập nhật trạng thái', 'tgs-sync-roll-up'),
+            ));
+        }
+    }
+
+    /**
+     * AJAX: Reject parent request (shop cha từ chối yêu cầu)
+     */
+    public function ajax_reject_parent_request()
+    {
+        check_ajax_referer('tgs_sync_roll_up_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $child_blog_id = isset($_POST['child_blog_id']) ? intval($_POST['child_blog_id']) : 0;
+
+        if (!$child_blog_id) {
+            wp_send_json_error(array(
+                'message' => __('ID shop con không hợp lệ!', 'tgs-sync-roll-up'),
+            ));
+        }
+
+        $parent_blog_id = get_current_blog_id();
+
+        // Lấy config của shop con
+        $child_config = $this->database->get_config($child_blog_id);
+
+        // Validate: shop con phải có yêu cầu pending với shop cha này
+        if (empty($child_config->approval_status) ||
+            $child_config->approval_status !== 'pending' ||
+            $child_config->parent_blog_id != $parent_blog_id) {
+            wp_send_json_error(array(
+                'message' => __('Yêu cầu không hợp lệ hoặc đã hết hạn!', 'tgs-sync-roll-up'),
+            ));
+        }
+
+        // Xóa parent_blog_id và set trạng thái rejected
+        $config_data = array(
+            'parent_blog_id' => null,
+            'approval_status' => 'rejected',
+        );
+
+        $result = $this->database->save_config($config_data, $child_blog_id);
+
+        if ($result !== false) {
+            wp_send_json_success(array(
+                'message' => __('Đã từ chối yêu cầu từ shop con!', 'tgs-sync-roll-up'),
+            ));
+        } else {
+            wp_send_json_error(array(
+                'message' => __('Lỗi khi cập nhật trạng thái', 'tgs-sync-roll-up'),
             ));
         }
     }
@@ -756,7 +865,9 @@ class TGS_Admin_Page
 
     /**
      * Lấy thông tin hierarchy của tất cả shops
-     * Chỉ lấy những shop có approval_status = 'approved'
+     * Bao gồm:
+     * - Shops có approval_status = 'approved' (đã có cha)
+     * - Shops không có parent_blog_id (root shops)
      * Trả về array: blog_id => parent_id (single parent)
      *
      * @return array Shop hierarchy
@@ -768,12 +879,16 @@ class TGS_Admin_Page
         $hierarchy = array();
 
         // Đọc từ bảng config chung wp_sync_roll_up_config
-        // CHỈ LẤY những shop có approval_status = 'approved'
+        // LẤY:
+        // 1. Shops có approval_status = 'approved' (đã được approve bởi shop cha)
+        // 2. Shops không có parent_blog_id (root shops)
         $config_table = TGSR_TABLE_SYNC_ROLL_UP_CONFIG;
         $configs = $wpdb->get_results(
             "SELECT blog_id, parent_blog_id
              FROM {$config_table}
-             WHERE approval_status = 'approved'"
+             WHERE approval_status = 'approved'
+             OR parent_blog_id IS NULL
+             OR parent_blog_id = ''"
         );
 
         foreach ($configs as $config) {
@@ -816,6 +931,40 @@ class TGS_Admin_Page
         }
 
         return $shops_syncing_to_me;
+    }
+
+    /**
+     * Lấy danh sách các yêu cầu từ shop con đang chờ approve
+     *
+     * @param int $parent_blog_id Blog ID của shop cha
+     * @return array Mảng chứa thông tin các yêu cầu đang chờ
+     */
+    private function get_pending_child_requests($parent_blog_id)
+    {
+        global $wpdb;
+
+        $pending_requests = array();
+
+        // Đọc từ bảng config chung
+        // LẤY những shop con có approval_status = 'pending'
+        $config_table = TGSR_TABLE_SYNC_ROLL_UP_CONFIG;
+        $results = $wpdb->get_results($wpdb->prepare(
+            "SELECT blog_id, created_at, updated_at FROM {$config_table}
+             WHERE parent_blog_id = %d
+             AND approval_status = 'pending'
+             ORDER BY updated_at DESC",
+            $parent_blog_id
+        ));
+
+        foreach ($results as $row) {
+            $pending_requests[] = array(
+                'blog_id' => $row->blog_id,
+                'blog_name' => self::get_blog_name($row->blog_id),
+                'requested_at' => $row->updated_at ?: $row->created_at
+            );
+        }
+
+        return $pending_requests;
     }
 
     /**

@@ -45,6 +45,62 @@ if (!defined('ABSPATH')) {
         </div>
     </div>
 
+    <!-- Pending Requests Notification -->
+    <?php if (!empty($pending_requests)):
+        $pending_count = count($pending_requests);
+    ?>
+    <div class="tgs-panel tgs-pending-requests" style="background: #fff3cd; border-left: 4px solid #ffc107;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
+            <h2 style="margin: 0;">
+                <span class="dashicons dashicons-bell" style="color: #ffc107; vertical-align: middle;"></span>
+                <?php esc_html_e('Yêu cầu chờ phê duyệt', 'tgs-sync-roll-up'); ?>
+                <span class="tgs-badge" style="background: #ffc107; color: #000;"><?php echo $pending_count; ?></span>
+            </h2>
+        </div>
+        <p class="description" style="margin-top: 0;">
+            <?php esc_html_e('Các shop con đã gửi yêu cầu kết nối với shop này. Vui lòng phê duyệt hoặc từ chối.', 'tgs-sync-roll-up'); ?>
+        </p>
+
+        <table class="wp-list-table widefat fixed striped" style="margin-top: 15px;">
+            <thead>
+                <tr>
+                    <th><?php esc_html_e('Shop con', 'tgs-sync-roll-up'); ?></th>
+                    <th><?php esc_html_e('Blog ID', 'tgs-sync-roll-up'); ?></th>
+                    <th><?php esc_html_e('Thời gian yêu cầu', 'tgs-sync-roll-up'); ?></th>
+                    <th><?php esc_html_e('Thao tác', 'tgs-sync-roll-up'); ?></th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($pending_requests as $request): ?>
+                <tr class="tgs-pending-request-row" data-blog-id="<?php echo esc_attr($request['blog_id']); ?>">
+                    <td><strong><?php echo esc_html($request['blog_name']); ?></strong></td>
+                    <td><span style="color: #999;">#<?php echo esc_html($request['blog_id']); ?></span></td>
+                    <td><?php echo esc_html(TGS_Admin_Page::format_datetime($request['requested_at'])); ?></td>
+                    <td>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <button type="button" class="button button-primary tgs-approve-request-btn"
+                                    data-blog-id="<?php echo esc_attr($request['blog_id']); ?>"
+                                    data-shop-name="<?php echo esc_attr($request['blog_name']); ?>">
+                                <span class="dashicons dashicons-yes" style="line-height: 1.4; vertical-align: middle;"></span>
+                                <?php esc_html_e('Chấp nhận', 'tgs-sync-roll-up'); ?>
+                            </button>
+                            <button type="button" class="button button-secondary tgs-reject-request-btn"
+                                    data-blog-id="<?php echo esc_attr($request['blog_id']); ?>"
+                                    data-shop-name="<?php echo esc_attr($request['blog_name']); ?>">
+                                <span class="dashicons dashicons-no" style="line-height: 1.4; vertical-align: middle;"></span>
+                                <?php esc_html_e('Từ chối', 'tgs-sync-roll-up'); ?>
+                            </button>
+                            <span class="spinner" style="float: none; margin: 0;"></span>
+                            <span class="tgs-request-message" style="font-size: 13px;"></span>
+                        </div>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php endif; ?>
+
     <!-- Charts Section -->
     <div class="tgs-charts-section">
         <div class="tgs-chart-container">
@@ -294,6 +350,120 @@ jQuery(document).ready(function($) {
 
         // Navigate to child shop dashboard
         window.location.href = adminUrl;
+    });
+
+    // ========== APPROVE / REJECT REQUESTS ==========
+
+    // Approve request
+    $(document).on('click', '.tgs-approve-request-btn', function(e) {
+        e.preventDefault();
+
+        var $button = $(this);
+        var $row = $button.closest('.tgs-pending-request-row');
+        var $spinner = $row.find('.spinner');
+        var $message = $row.find('.tgs-request-message');
+        var $buttons = $row.find('button');
+
+        var childBlogId = $button.data('blog-id');
+        var shopName = $button.data('shop-name');
+
+        if (!confirm('Bạn có chắc chắn muốn chấp nhận yêu cầu từ "' + shopName + '"?')) {
+            return;
+        }
+
+        // Show loading
+        $buttons.prop('disabled', true);
+        $spinner.addClass('is-active');
+        $message.removeClass('success error').text('');
+
+        // Send AJAX request
+        $.post('<?php echo admin_url('admin-ajax.php'); ?>', {
+            action: 'tgs_approve_parent_request',
+            nonce: '<?php echo wp_create_nonce('tgs_sync_roll_up_nonce'); ?>',
+            child_blog_id: childBlogId
+        })
+        .done(function(response) {
+            if (response.success) {
+                $message.addClass('success').css('color', '#00a32a').text(response.data.message);
+
+                // Remove row after 1 second and reload if no more pending requests
+                setTimeout(function() {
+                    $row.fadeOut(function() {
+                        $(this).remove();
+
+                        // If no more rows, reload page to update UI
+                        if ($('.tgs-pending-request-row').length === 0) {
+                            location.reload();
+                        }
+                    });
+                }, 1000);
+            } else {
+                $message.addClass('error').css('color', '#d63638').text(response.data.message || 'Có lỗi xảy ra');
+                $buttons.prop('disabled', false);
+                $spinner.removeClass('is-active');
+            }
+        })
+        .fail(function() {
+            $message.addClass('error').css('color', '#d63638').text('Có lỗi xảy ra khi kết nối');
+            $buttons.prop('disabled', false);
+            $spinner.removeClass('is-active');
+        });
+    });
+
+    // Reject request
+    $(document).on('click', '.tgs-reject-request-btn', function(e) {
+        e.preventDefault();
+
+        var $button = $(this);
+        var $row = $button.closest('.tgs-pending-request-row');
+        var $spinner = $row.find('.spinner');
+        var $message = $row.find('.tgs-request-message');
+        var $buttons = $row.find('button');
+
+        var childBlogId = $button.data('blog-id');
+        var shopName = $button.data('shop-name');
+
+        if (!confirm('Bạn có chắc chắn muốn từ chối yêu cầu từ "' + shopName + '"?')) {
+            return;
+        }
+
+        // Show loading
+        $buttons.prop('disabled', true);
+        $spinner.addClass('is-active');
+        $message.removeClass('success error').text('');
+
+        // Send AJAX request
+        $.post('<?php echo admin_url('admin-ajax.php'); ?>', {
+            action: 'tgs_reject_parent_request',
+            nonce: '<?php echo wp_create_nonce('tgs_sync_roll_up_nonce'); ?>',
+            child_blog_id: childBlogId
+        })
+        .done(function(response) {
+            if (response.success) {
+                $message.addClass('success').css('color', '#00a32a').text(response.data.message);
+
+                // Remove row after 1 second and reload if no more pending requests
+                setTimeout(function() {
+                    $row.fadeOut(function() {
+                        $(this).remove();
+
+                        // If no more rows, reload page to update UI
+                        if ($('.tgs-pending-request-row').length === 0) {
+                            location.reload();
+                        }
+                    });
+                }, 1000);
+            } else {
+                $message.addClass('error').css('color', '#d63638').text(response.data.message || 'Có lỗi xảy ra');
+                $buttons.prop('disabled', false);
+                $spinner.removeClass('is-active');
+            }
+        })
+        .fail(function() {
+            $message.addClass('error').css('color', '#d63638').text('Có lỗi xảy ra khi kết nối');
+            $buttons.prop('disabled', false);
+            $spinner.removeClass('is-active');
+        });
     });
 });
 </script>

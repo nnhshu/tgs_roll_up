@@ -28,8 +28,6 @@ if (!defined('ABSPATH')) {
             // Lấy trạng thái approval
             $approval_status = $config->approval_status ?? null;
             $is_pending = ($approval_status === 'pending');
-            $is_approved = ($approval_status === 'approved');
-            $has_parent_and_approved = (!empty($parent_blog_id) && $is_approved);
             ?>
 
             <table class="form-table">
@@ -40,7 +38,7 @@ if (!defined('ABSPATH')) {
                     <td>
                         <?php if (!empty($all_blogs)): ?>
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <select name="parent_blog_id" id="parent_blog_id" class="tgs-select2" style="width: 100%; max-width: 400px;" <?php disabled($is_pending || $has_parent_and_approved); ?>>
+                                <select name="parent_blog_id" id="parent_blog_id" class="tgs-select2" style="width: 100%; max-width: 400px;" <?php disabled($is_pending); ?>>
                                     <option value=""><?php esc_html_e('-- Không có shop cha --', 'tgs-sync-roll-up'); ?></option>
                                     <?php foreach ($all_blogs as $blog): ?>
                                         <?php if ($blog->blog_id != $blog_id): // Không cho chọn chính mình ?>
@@ -53,13 +51,7 @@ if (!defined('ABSPATH')) {
                                     <?php endforeach; ?>
                                 </select>
 
-                                <?php if ($has_parent_and_approved): ?>
-                                    <!-- Đã có cha và đã approved: không hiển thị nút -->
-                                    <p class="description" style="color: #856404; margin: 0;">
-                                        <span class="dashicons dashicons-lock" style="vertical-align: middle;"></span>
-                                        <?php esc_html_e('Shop cha đã được cấu hình và không thể thay đổi.', 'tgs-sync-roll-up'); ?>
-                                    </p>
-                                <?php elseif ($is_pending): ?>
+                                <?php if ($is_pending): ?>
                                     <!-- Đang pending: hiển thị nút Hủy Yêu Cầu màu đỏ -->
                                     <div class="tgs-parent-actions">
                                         <span id="tgs-save-parent-message" class="tgs-message"></span>
@@ -70,7 +62,7 @@ if (!defined('ABSPATH')) {
                                         </button>
                                     </div>
                                 <?php else: ?>
-                                    <!-- Chưa có cha hoặc chưa pending: hiển thị nút Yêu Cầu -->
+                                    <!-- Hiển thị nút Yêu Cầu (hoặc Thay Đổi nếu đã có cha) -->
                                     <div class="tgs-parent-actions">
                                         <span id="tgs-save-parent-message" class="tgs-message"></span>
                                         <span class="spinner" id="tgs-parent-spinner"></span>
