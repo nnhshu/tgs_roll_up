@@ -52,6 +52,7 @@ class TGS_Sync_Roll_Up_Database
             config_id BIGINT NOT NULL AUTO_INCREMENT,
             blog_id BIGINT NOT NULL,
             parent_blog_id BIGINT,
+            approval_status ENUM('pending','approved','rejected') DEFAULT NULL,
             sync_interval VARCHAR(50) DEFAULT 'hourly',
             sync_enabled TINYINT DEFAULT 1,
             last_sync_at DATETIME,
@@ -163,6 +164,7 @@ class TGS_Sync_Roll_Up_Database
                 'config_id'                 => 0,
                 'blog_id'                   => $blog_id,
                 'parent_blog_id'            => null,
+                'approval_status'           => null,
                 'sync_interval'             => 'hourly',
                 'sync_enabled'              => 1,
                 'last_sync_at'              => null,
@@ -202,6 +204,7 @@ class TGS_Sync_Roll_Up_Database
         $save_data = array(
             'blog_id'           => $blog_id,
             'parent_blog_id'    => $parent_id,
+            'approval_status'   => isset($data['approval_status']) ? $data['approval_status'] : null,
             'sync_interval'     => isset($data['sync_interval']) ? $data['sync_interval'] : 'hourly',
             'sync_enabled'      => isset($data['sync_enabled']) ? intval($data['sync_enabled']) : 1,
             'auto_rollup_daily' => isset($data['auto_rollup_daily']) ? intval($data['auto_rollup_daily']) : 1,
