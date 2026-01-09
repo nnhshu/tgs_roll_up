@@ -13,10 +13,24 @@ if (!defined('ABSPATH')) {
 <div class="wrap tgs-sync-settings">
     <h1><?php esc_html_e('TGS Sync Roll Up - Cài đặt', 'tgs-sync-roll-up'); ?></h1>
 
-    <form id="tgs-settings-form" method="post">
+    <!-- Form riêng cho Parent Shop -->
+    <form id="tgs-parent-form" method="post">
         <div class="tgs-panel">
-            <h2><?php esc_html_e('Cấu hình Shop Cha (Parent Shops)', 'tgs-sync-roll-up'); ?></h2>
-            <p class="description">
+            <div class="tgs-panel-header">
+                <h2><?php esc_html_e('Cấu hình Shop Cha (Parent Shops)', 'tgs-sync-roll-up'); ?></h2>
+                <?php if (empty($parent_blog_id)): ?>
+                <div class="tgs-panel-actions">
+                    <span id="tgs-save-parent-message" class="tgs-message"></span>
+                    <span class="spinner" id="tgs-parent-spinner"></span>
+                    <button type="submit" class="button button-primary" id="tgs-save-parent-btn">
+                        <span class="dashicons dashicons-admin-multisite" style="line-height: 1.4;"></span>
+                        <?php esc_html_e('Lưu Shop Cha', 'tgs-sync-roll-up'); ?>
+                    </button>
+                </div>
+                <?php endif; ?>
+            </div>
+
+            <p class="description" style="margin-top: 0;">
                 <?php esc_html_e('Chọn shop cha để đồng bộ dữ liệu roll_up. Shop cha sẽ nhận dữ liệu tổng hợp từ shop này.', 'tgs-sync-roll-up'); ?>
             </p>
 
@@ -58,16 +72,17 @@ if (!defined('ABSPATH')) {
                 </tr>
             </table>
         </div>
+    </form>
 
-        <!-- Hierarchy Tree Panel -->
-        <div class="tgs-panel tgs-hierarchy-panel">
-            <h2>
-                <span class="dashicons dashicons-networking"></span>
-                <?php esc_html_e('Sơ đồ phân cấp Shop', 'tgs-sync-roll-up'); ?>
-            </h2>
-            <p class="description">
-                <?php esc_html_e('Sơ đồ hiển thị quan hệ cha-con giữa các shop. Mũi tên chỉ hướng dữ liệu được đẩy lên (từ con → cha).', 'tgs-sync-roll-up'); ?>
-            </p>
+    <!-- Hierarchy Tree Panel -->
+    <div class="tgs-panel tgs-hierarchy-panel">
+        <h2>
+            <span class="dashicons dashicons-networking"></span>
+            <?php esc_html_e('Sơ đồ phân cấp Shop', 'tgs-sync-roll-up'); ?>
+        </h2>
+        <p class="description">
+            <?php esc_html_e('Sơ đồ hiển thị quan hệ cha-con giữa các shop. Mũi tên chỉ hướng dữ liệu được đẩy lên (từ con → cha).', 'tgs-sync-roll-up'); ?>
+        </p>
 
             <div class="tgs-hierarchy-tree">
                 <?php
@@ -165,10 +180,22 @@ if (!defined('ABSPATH')) {
                     <li><span class="tgs-tree-badge tgs-tree-badge-current"><?php esc_html_e('Đang xem', 'tgs-sync-roll-up'); ?></span> <?php esc_html_e('Shop hiện tại', 'tgs-sync-roll-up'); ?></li>
                 </ul>
             </div>
-        </div>
+    </div>
 
+    <!-- Form riêng cho Sync Settings -->
+    <form id="tgs-settings-form" method="post">
         <div class="tgs-panel">
-            <h2><?php esc_html_e('Cấu hình Sync', 'tgs-sync-roll-up'); ?></h2>
+            <div class="tgs-panel-header">
+                <h2><?php esc_html_e('Cấu hình Sync', 'tgs-sync-roll-up'); ?></h2>
+                <div class="tgs-panel-actions">
+                    <span id="tgs-save-message" class="tgs-message"></span>
+                    <span class="spinner"></span>
+                    <button type="submit" class="button button-primary" id="tgs-save-settings-btn">
+                        <span class="dashicons dashicons-saved" style="line-height: 1.4;"></span>
+                        <?php esc_html_e('Lưu cài đặt', 'tgs-sync-roll-up'); ?>
+                    </button>
+                </div>
+            </div>
 
             <table class="form-table">
                 <tr>
@@ -280,52 +307,56 @@ if (!defined('ABSPATH')) {
                 </tr>
             </table>
         </div>
-
-        <p class="submit">
-            <button type="submit" class="button button-primary" id="tgs-save-settings-btn">
-                <span class="dashicons dashicons-saved"></span>
-                <?php esc_html_e('Lưu cài đặt', 'tgs-sync-roll-up'); ?>
-            </button>
-            <span class="spinner" style="float: none;"></span>
-            <span id="tgs-save-message" class="tgs-message"></span>
-        </p>
     </form>
-
-    <!-- Danger Zone -->
-    <div class="tgs-panel tgs-panel-danger">
-        <h2><?php esc_html_e('Vùng nguy hiểm', 'tgs-sync-roll-up'); ?></h2>
-        <p class="description">
-            <?php esc_html_e('Các thao tác dưới đây có thể ảnh hưởng đến dữ liệu. Hãy cân nhắc trước khi thực hiện.', 'tgs-sync-roll-up'); ?>
-        </p>
-
-        <table class="form-table">
-            <tr>
-                <th><?php esc_html_e('Rebuild Roll-up', 'tgs-sync-roll-up'); ?></th>
-                <td>
-                    <button type="button" class="button button-secondary" id="tgs-rebuild-all-btn">
-                        <?php esc_html_e('Rebuild toàn bộ tháng này', 'tgs-sync-roll-up'); ?>
-                    </button>
-                    <p class="description">
-                        <?php esc_html_e('Tính toán lại tất cả dữ liệu roll_up từ đầu tháng đến hôm nay.', 'tgs-sync-roll-up'); ?>
-                    </p>
-                </td>
-            </tr>
-            <tr>
-                <th><?php esc_html_e('Force Sync', 'tgs-sync-roll-up'); ?></th>
-                <td>
-                    <button type="button" class="button button-secondary" id="tgs-force-sync-btn">
-                        <?php esc_html_e('Sync ngay lập tức', 'tgs-sync-roll-up'); ?>
-                    </button>
-                    <p class="description">
-                        <?php esc_html_e('Chạy sync ngay lập tức bất kể thời gian đã lên lịch.', 'tgs-sync-roll-up'); ?>
-                    </p>
-                </td>
-            </tr>
-        </table>
-    </div>
 </div>
 
 <style>
+/* Panel Header with Actions */
+.tgs-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #ddd;
+}
+
+.tgs-panel-header h2 {
+    margin: 0;
+    padding: 0;
+    line-height: 1.4;
+}
+
+.tgs-panel-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.tgs-panel-actions .button .dashicons {
+    line-height: inherit;
+    vertical-align: middle;
+    margin-top: -2px;
+}
+
+.tgs-panel-actions .spinner {
+    float: none;
+    margin: 0;
+}
+
+.tgs-panel-actions .tgs-message {
+    white-space: nowrap;
+    font-size: 13px;
+}
+
+.tgs-panel-actions .tgs-message.success {
+    color: #00a32a;
+}
+
+.tgs-panel-actions .tgs-message.error {
+    color: #d63638;
+}
+
 /* Toggle Switch */
 .tgs-switch {
     position: relative;

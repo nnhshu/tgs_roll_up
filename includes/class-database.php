@@ -159,9 +159,8 @@ class TGS_Sync_Roll_Up_Database
         );
 
         if (!$config) {
-            // Return default config as object
-            $config = (object) array(
-                'config_id'                 => 0,
+            // Tạo config mới với giá trị default
+            $default_config = array(
                 'blog_id'                   => $blog_id,
                 'parent_blog_id'            => null,
                 'approval_status'           => null,
@@ -171,6 +170,19 @@ class TGS_Sync_Roll_Up_Database
                 'next_sync_at'              => null,
                 'auto_rollup_daily'         => 1,
                 'rollup_time'               => '00:30:00',
+                'created_at'                => current_time('mysql'),
+                'updated_at'                => current_time('mysql'),
+            );
+
+            $wpdb->insert($this->config_table, $default_config);
+            $config_id = $wpdb->insert_id;
+
+            // Đọc lại config vừa tạo
+            $config = $wpdb->get_row(
+                $wpdb->prepare(
+                    "SELECT * FROM {$this->config_table} WHERE config_id = %d",
+                    $config_id
+                )
             );
         }
 

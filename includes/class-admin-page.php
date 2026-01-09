@@ -53,6 +53,7 @@ class TGS_Admin_Page
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
 
         // AJAX handlers
+        add_action('wp_ajax_tgs_save_parent_shop', array($this, 'ajax_save_parent_shop'));
         add_action('wp_ajax_tgs_save_sync_settings', array($this, 'ajax_save_settings'));
         add_action('wp_ajax_tgs_manual_sync', array($this, 'ajax_manual_sync'));
         add_action('wp_ajax_tgs_rebuild_rollup', array($this, 'ajax_rebuild_rollup'));
@@ -315,7 +316,58 @@ class TGS_Admin_Page
     }
 
     /**
-     * AJAX: Save settings
+     * AJAX: Save parent shop (riêng biệt)
+     */
+    public function ajax_save_parent_shop()
+    {
+        check_ajax_referer('tgs_sync_roll_up_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $blog_id = get_current_blog_id();
+
+        // Lấy parent_blog_id từ request
+        $parent_blog_id = isset($_POST['parent_blog_id']) && !empty($_POST['parent_blog_id'])
+            ? intval($_POST['parent_blog_id'])
+            : null;
+
+        // Validate: không cho phép chọn chính mình làm cha
+        if (!empty($parent_blog_id) && $parent_blog_id == $blog_id) {
+            wp_send_json_error(array(
+                'message' => __('Không thể chọn chính mình làm shop cha!', 'tgs-sync-roll-up'),
+            ));
+        }
+
+        // Check if parent already configured
+        $current_config = $this->database->get_config($blog_id);
+        if (!empty($current_config->parent_blog_id)) {
+            wp_send_json_error(array(
+                'message' => __('Shop cha đã được cấu hình và không thể thay đổi!', 'tgs-sync-roll-up'),
+            ));
+        }
+
+        // Lưu parent shop
+        $config_data = array(
+            'parent_blog_id' => $parent_blog_id,
+        );
+
+        $result = $this->database->save_config($config_data, $blog_id);
+
+        if ($result !== false) {
+            wp_send_json_success(array(
+                'message' => __('Shop cha đã được lưu thành công!', 'tgs-sync-roll-up'),
+            ));
+        } else {
+            wp_send_json_error(array(
+                'message' => __('Lỗi khi lưu shop cha', 'tgs-sync-roll-up'),
+            ));
+        }
+    }
+
+    /**
+     * AJAX: Save settings (KHÔNG bao gồm parent shop)
      */
     public function ajax_save_settings()
     {
@@ -327,24 +379,12 @@ class TGS_Admin_Page
 
         $blog_id = get_current_blog_id();
 
-        // Lấy dữ liệu từ request
-        $parent_blog_id = isset($_POST['parent_blog_id']) && !empty($_POST['parent_blog_id'])
-            ? intval($_POST['parent_blog_id'])
-            : null;
-            
+        // Lấy dữ liệu từ request (KHÔNG lấy parent_blog_id nữa)
         $sync_enabled = isset($_POST['sync_enabled']) ? intval($_POST['sync_enabled']) : 0;
         $sync_frequency = isset($_POST['sync_frequency']) ? sanitize_text_field($_POST['sync_frequency']) : 'hourly';
 
-        // Validate: không cho phép chọn chính mình làm cha
-        if (!empty($parent_blog_id) && $parent_blog_id == $blog_id) {
-            wp_send_json_error(array(
-                'message' => __('Không thể chọn chính mình làm shop cha!', 'tgs-sync-roll-up'),
-            ));
-        }
-
-        // Lưu config - parent_blog_id là single value
+        // Lưu config sync settings only
         $config_data = array(
-            'parent_blog_id' => $parent_blog_id,
             'sync_enabled' => $sync_enabled,
             'sync_interval' => $sync_frequency,
         );
