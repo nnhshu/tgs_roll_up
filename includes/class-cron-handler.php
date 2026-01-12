@@ -24,6 +24,11 @@ class TGS_Cron_Handler
     private $calculator;
 
     /**
+     * Inventory calculator instance
+     */
+    private $inventory_calculator;
+
+    /**
      * Database instance
      */
     private $database;
@@ -45,6 +50,7 @@ class TGS_Cron_Handler
     {
         $this->sync_manager = new TGS_Sync_Manager();
         $this->calculator = new TGS_Roll_Up_Calculator();
+        $this->inventory_calculator = new TGS_Inventory_Roll_Up_Calculator();
         $this->database = new TGS_Sync_Roll_Up_Database();
 
         // Đăng ký các hooks (không cần monthly hook vì sử dụng GROUP BY thay vì bảng riêng)
@@ -426,6 +432,19 @@ class TGS_Cron_Handler
                 }
             }
 
+            // Tính inventory roll_up nếu sync_type là 'inventory' hoặc 'all'
+            $inventory_saved_count = 0;
+            if ($sync_type === 'inventory' || $sync_type === 'all') {
+                $inventory_roll_up = $this->inventory_calculator->calculate_daily_inventory_roll_up($blog_id, $date);
+
+                foreach ($inventory_roll_up as $inventory_data) {
+                    $inventory_id = $this->inventory_calculator->save_inventory_roll_up($inventory_data);
+                    if ($inventory_id) {
+                        $inventory_saved_count++;
+                    }
+                }
+            }
+
             // Sync lên các shop cha (chỉ gọi 1 lần sau khi đã lưu hết)
             $sync_result = $this->sync_manager->sync_to_parents($blog_id, $date);
 
@@ -435,6 +454,7 @@ class TGS_Cron_Handler
                 'date' => $date,
                 'sync_type' => $sync_type,
                 'saved_count' => count($saved_ids),
+                'inventory_saved_count' => $inventory_saved_count,
                 'sync_result' => $sync_result,
             );
         } catch (Exception $e) {

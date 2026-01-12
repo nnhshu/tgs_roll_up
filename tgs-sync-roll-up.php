@@ -103,6 +103,7 @@ class TGS_Sync_Roll_Up
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/class-database.php';
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/class-data-collector.php';
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/class-roll-up-calculator.php';
+        require_once TGS_SYNC_ROLL_UP_PATH . 'includes/class-inventory-calculator.php';
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/class-sync-manager.php';
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/class-cron-handler.php';
 
@@ -147,11 +148,49 @@ class TGS_Sync_Roll_Up
         $database = new TGS_Sync_Roll_Up_Database();
         $database->create_tables();
 
+        // Create inventory_roll_up table
+        $this->create_inventory_table();
+
         // Schedule cron
         $cron_handler = new TGS_Cron_Handler();
         $cron_handler->schedule_crons();
 
         flush_rewrite_rules();
+    }
+
+    /**
+     * Create inventory_roll_up table
+     */
+    private function create_inventory_table()
+    {
+        global $wpdb;
+
+        $table_name = $wpdb->prefix . 'inventory_roll_up';
+        $charset_collate = $wpdb->get_charset_collate();
+
+        $sql = "CREATE TABLE IF NOT EXISTS {$table_name} (
+            `id` bigint NOT NULL AUTO_INCREMENT,
+            `blog_id` bigint DEFAULT NULL,
+            `local_product_name_id` bigint NOT NULL,
+            `global_product_name_id` bigint DEFAULT NULL,
+            `roll_up_date` date NOT NULL,
+            `roll_up_day` int NOT NULL,
+            `roll_up_month` int NOT NULL,
+            `roll_up_year` int NOT NULL,
+            `inventory_qty` decimal(15,3) DEFAULT '0.000',
+            `inventory_value` decimal(15,2) DEFAULT '0.00',
+            `meta` json DEFAULT NULL,
+            `created_at` datetime NOT NULL,
+            `updated_at` datetime DEFAULT NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uk_blog_day_month_year_product` (`blog_id`,`roll_up_day`,`roll_up_month`,`roll_up_year`,`local_product_name_id`),
+            KEY `idx_blog_id` (`blog_id`),
+            KEY `idx_roll_up_date` (`roll_up_date`),
+            KEY `idx_product_name` (`local_product_name_id`)
+        ) {$charset_collate};";
+
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        dbDelta($sql);
     }
 
     /**
