@@ -103,7 +103,8 @@ class TGS_Sync_Manager
                     'roll_up_month' => $record['roll_up_month'],
                     'roll_up_year' => $record['roll_up_year'],
                     'local_product_name_id' => $record['local_product_name_id'],
-                    'amount' => $record['amount'],
+                    'amount_after_tax' => $record['amount_after_tax'],
+                    'tax' => $record['tax'],
                     'quantity' => $record['quantity'],
                     'type' => $record['type'],
                 );

@@ -87,8 +87,13 @@ class TGS_Roll_Up_Calculator
             // Tạo unique key bao gồm cả type để group đúng
             $key = $item->local_product_name_id . '_' . $ledger_type;
             
+            $tax_amount = floatval($item->local_ledger_item_tax_amount ?? 0);
+            $amount_before_tax = $item->quantity * $item->price;
+            $amount_after_tax = $amount_before_tax + $tax_amount;
+
             if (isset($roll_up_data[$key])) {
-                $roll_up_data[$key]['amount'] += ($item->quantity * $item->price) + ($item->local_ledger_item_tax_amount ?? 0);;
+                $roll_up_data[$key]['amount_after_tax'] += $amount_after_tax;
+                $roll_up_data[$key]['tax'] += $tax_amount;
                 $roll_up_data[$key]['quantity'] += $item->quantity;
 
                 // Merge lot_ids (không trùng lặp)
@@ -107,7 +112,8 @@ class TGS_Roll_Up_Calculator
                 'roll_up_month' => $month,
                 'roll_up_year' => $year,
                 'local_product_name_id' => $item->local_product_name_id,
-                'amount' => ($item->quantity * $item->price) + ($item->local_ledger_item_tax_amount ?? 0),
+                'amount_after_tax' => $amount_after_tax,
+                'tax' => $tax_amount,
                 'quantity' => $item->quantity,
                 'type' => $ledger_type,
                 'lot_ids' => $lot_ids,
@@ -415,7 +421,7 @@ class TGS_Roll_Up_Calculator
         }
 
         // Các cột sẽ cộng dồn khi duplicate (nếu $overwrite = false)
-        $cumulative_columns = $overwrite ? array() : array('amount', 'quantity');
+        $cumulative_columns = $overwrite ? array() : array('amount_after_tax', 'tax', 'quantity');
 
         // Tạo danh sách columns và values
         $columns = array();

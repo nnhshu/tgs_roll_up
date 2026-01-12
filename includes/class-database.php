@@ -99,7 +99,7 @@ class TGS_Sync_Roll_Up_Database
             roll_up_day INT NOT NULL,
             roll_up_month INT NOT NULL,
             roll_up_year INT NOT NULL,
-            amount_befor_tax DECIMAL(15,2) DEFAULT 0,
+            amount_after_tax DECIMAL(15,2) DEFAULT 0,
             tax DECIMAL(15,2) DEFAULT 0,
             quantity INT DEFAULT 0,
             type TINYINT DEFAULT 0,
