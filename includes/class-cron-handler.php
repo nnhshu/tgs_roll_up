@@ -459,7 +459,7 @@ class TGS_Cron_Handler
         global $wpdb;
 
         $meta_table = $wpdb->prefix . 'roll_up_meta';
-        $roll_up_table = $wpdb->prefix . 'roll_up';
+        $roll_up_table = $wpdb->prefix . 'product_roll_up';
 
         $meta = $wpdb->get_row($wpdb->prepare(
             "SELECT rm.own_data, rm.children_summary

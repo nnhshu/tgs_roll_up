@@ -64,7 +64,7 @@ class TGS_Sync_Manager
         $parent_blog_id = intval($config->parent_blog_id);
 
         // Lấy TẤT CẢ records roll_up của shop con cho ngày này
-        $table = $wpdb->prefix . 'roll_up';
+        $table = $wpdb->prefix . 'product_roll_up';
         $date_parts = explode('-', $date);
         $year = intval($date_parts[0]);
         $month = intval($date_parts[1]);
@@ -362,7 +362,7 @@ class TGS_Sync_Manager
         }
 
         $meta_table = $wpdb->prefix . 'roll_up_meta';
-        $roll_up_table = $wpdb->prefix . 'roll_up';
+        $roll_up_table = $wpdb->prefix . 'product_roll_up';
 
         $meta = $wpdb->get_row($wpdb->prepare(
             "SELECT rm.children_summary
@@ -407,7 +407,7 @@ class TGS_Sync_Manager
         global $wpdb;
 
         $meta_table = $wpdb->prefix . 'roll_up_meta';
-        $roll_up_table = $wpdb->prefix . 'roll_up';
+        $roll_up_table = $wpdb->prefix . 'product_roll_up';
 
         $meta = $wpdb->get_row($wpdb->prepare(
             "SELECT rm.own_data, rm.children_summary
@@ -553,7 +553,7 @@ class TGS_Sync_Manager
     {
         global $wpdb;
 
-        $table = $wpdb->prefix . 'roll_up';
+        $table = $wpdb->prefix . 'product_roll_up';
 
         $wpdb->update(
             $table,
@@ -690,7 +690,7 @@ class TGS_Sync_Manager
         global $wpdb;
 
         $meta_table = $wpdb->prefix . 'roll_up_meta';
-        $roll_up_table = $wpdb->prefix . 'roll_up';
+        $roll_up_table = $wpdb->prefix . 'product_roll_up';
 
         $meta = $wpdb->get_row($wpdb->prepare(
             "SELECT rm.children_summary, rm.sync_log, r.last_sync_at

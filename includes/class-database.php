@@ -71,6 +71,10 @@ class TGS_Sync_Roll_Up_Database
         // 2. Tạo bảng roll_up cho site hiện tại đang activate plugin
         $current_blog_id = get_current_blog_id();
         self::create_roll_up_table($current_blog_id);
+
+        // 3. Tạo bảng roll_up cho site hiện tại đang activate plugin
+        $current_blog_id = get_current_blog_id();
+        self::create_roll_up_table($current_blog_id);
     }
 
     /**
@@ -84,8 +88,8 @@ class TGS_Sync_Roll_Up_Database
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
 
         $charset_collate = $wpdb->get_charset_collate();
-        $table_name = $wpdb->prefix . 'roll_up';
-        error_log("Creating roll_up table for blog ID: $blog_id as $table_name");
+        $table_name = $wpdb->prefix . 'product_roll_up';
+        error_log("Creating product_roll_up table for blog ID: $blog_id as $table_name");
         $sql = "CREATE TABLE $table_name (
             roll_up_id BIGINT NOT NULL AUTO_INCREMENT,
             blog_id BIGINT,
@@ -95,7 +99,8 @@ class TGS_Sync_Roll_Up_Database
             roll_up_day INT NOT NULL,
             roll_up_month INT NOT NULL,
             roll_up_year INT NOT NULL,
-            amount DECIMAL(15,2) DEFAULT 0,
+            amount_befor_tax DECIMAL(15,2) DEFAULT 0,
+            tax DECIMAL(15,2) DEFAULT 0,
             quantity INT DEFAULT 0,
             type TINYINT DEFAULT 0,
             meta JSON,
@@ -106,6 +111,42 @@ class TGS_Sync_Roll_Up_Database
             UNIQUE KEY uk_blog_day_month_year_product_type (blog_id, roll_up_day, roll_up_month, roll_up_year, local_product_name_id, type),
             KEY idx_blog_id (blog_id),
             KEY idx_type (type)
+        ) $charset_collate;";
+
+        dbDelta($sql);
+    }
+
+     /**
+     * Tạo bảng inventory_roll_up cho một blog cụ thể
+     *
+     * @param int $blog_id Blog ID
+     */
+    public static function create_inventory_roll_up_table($blog_id)
+    {
+        global $wpdb;
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+
+        $charset_collate = $wpdb->get_charset_collate();
+        $table_name = $wpdb->prefix . 'inventory_roll_up';
+        error_log("Creating inventory_roll_up table for blog ID: $blog_id as $table_name");
+        $sql = "CREATE TABLE $table_name (
+            id BIGINT NOT NULL AUTO_INCREMENT,
+            blog_id BIGINT,
+            local_product_name_id BIGINT NOT NULL,
+            global_product_name_id BIGINT,
+            roll_up_date DATE NOT NULL,
+            roll_up_day INT NOT NULL,
+            roll_up_month INT NOT NULL,
+            roll_up_year INT NOT NULL,
+            inventory_qty INT DEFAULT 0,
+            inventory_value DECIMAL(15,2) DEFAULT 0,
+            meta JSON,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME,
+
+            PRIMARY KEY (id),
+            UNIQUE KEY uk_blog_day_month_year_product (blog_id, roll_up_day, roll_up_month, roll_up_year, local_product_name_id),
+            KEY idx_blog_id (blog_id)
         ) $charset_collate;";
 
         dbDelta($sql);
@@ -122,10 +163,14 @@ class TGS_Sync_Roll_Up_Database
         $config_table = self::get_config_table_name();
         $wpdb->query("DROP TABLE IF EXISTS $config_table");
 
-        // 2. Xóa bảng roll_up của site hiện tại
+        // 2. Xóa bảng product_roll_up của site hiện tại
         $current_blog_id = get_current_blog_id();
-        $roll_up_table = $wpdb->prefix . $current_blog_id . '_roll_up';
+        $roll_up_table = $wpdb->prefix . $current_blog_id . '_product_roll_up';
         $wpdb->query("DROP TABLE IF EXISTS $roll_up_table");
+
+        // 3. Xóa bảng inventory_roll_up của site hiện tại
+        $inventory_roll_up_table = $wpdb->prefix . $current_blog_id . '_inventory_roll_up';
+        $wpdb->query("DROP TABLE IF EXISTS $inventory_roll_up_table");
     }
 
     /**
@@ -141,11 +186,11 @@ class TGS_Sync_Roll_Up_Database
 
         // Check if config table exists
         $config_table_exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $this->config_table));
-        
-        // Check if roll_up table exists
-        $roll_up_table = $wpdb->prefix . 'roll_up';
+
+        // Check if product_roll_up table exists
+        $roll_up_table = $wpdb->prefix . 'product_roll_up';
         $roll_up_table_exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $roll_up_table));
-        
+
         // If either table doesn't exist, create both
         if (!$config_table_exists || !$roll_up_table_exists) {
             self::create_tables();

@@ -357,7 +357,7 @@ class TGS_Roll_Up_Calculator
         }
 
         // Dùng $wpdb->prefix để lấy đúng bảng sau khi switch_to_blog
-        $table = $wpdb->prefix . 'roll_up';
+        $table = $wpdb->prefix . 'product_roll_up';
 
         // Đảm bảo có created_at và updated_at
         $current_time = current_time('mysql');
@@ -511,7 +511,7 @@ class TGS_Roll_Up_Calculator
         }
 
         // Dùng $wpdb->prefix để lấy đúng bảng sau khi switch_to_blog
-        $table = $wpdb->prefix . 'roll_up';
+        $table = $wpdb->prefix . 'product_roll_up';
 
         return $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$table} WHERE blog_id = %d AND roll_up_date = %s",
@@ -535,7 +535,7 @@ class TGS_Roll_Up_Calculator
             return null;
         }
 
-        $roll_up_table = $wpdb->prefix . 'roll_up';
+        $roll_up_table = $wpdb->prefix . 'product_roll_up';
         $meta_table = $wpdb->prefix . 'roll_up_meta';
 
         $meta = $wpdb->get_row($wpdb->prepare(
@@ -770,7 +770,7 @@ class TGS_Roll_Up_Calculator
     {
         global $wpdb;
 
-        $table = $wpdb->prefix . 'roll_up';
+        $table = $wpdb->prefix . 'product_roll_up';
 
         // Nếu cùng 1 ngày, lấy trực tiếp
         if ($from_date === $to_date) {
@@ -874,7 +874,7 @@ class TGS_Roll_Up_Calculator
             $blog_id = get_current_blog_id();
         }
 
-        $table = $wpdb->prefix . 'roll_up';
+        $table = $wpdb->prefix . 'product_roll_up';
 
         // Chuẩn bị WHERE clause
         $where_parts = array();
@@ -966,7 +966,7 @@ class TGS_Roll_Up_Calculator
             $blog_id = get_current_blog_id();
         }
 
-        $table = $wpdb->prefix . 'roll_up';
+        $table = $wpdb->prefix . 'product_roll_up';
 
         // Chuẩn bị WHERE clause cơ bản
         $where_parts = array();

@@ -770,7 +770,7 @@ class TGS_Admin_Page
     {
         global $wpdb;
 
-        $table = $wpdb->prefix . 'roll_up';
+        $table = $wpdb->prefix . 'product_roll_up';
         $end_date = current_time('Y-m-d');
         $start_date = date('Y-m-d', strtotime("-{$days} days"));
 
