@@ -49,19 +49,19 @@ if (!defined('ABSPATH')) {
     <?php if (!empty($pending_requests)):
         $pending_count = count($pending_requests);
     ?>
-    <div class="tgs-panel tgs-pending-requests" style="background: #fff3cd; border-left: 4px solid #ffc107;">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px;">
-            <h2 style="margin: 0;">
-                <span class="dashicons dashicons-bell" style="color: #ffc107; vertical-align: middle;"></span>
+    <div class="tgs-panel tgs-pending-requests">
+        <div class="tgs-pending-requests-header">
+            <h2>
+                <span class="dashicons dashicons-bell"></span>
                 <?php esc_html_e('Yêu cầu chờ phê duyệt', 'tgs-sync-roll-up'); ?>
-                <span class="tgs-badge" style="background: #ffc107; color: #000;"><?php echo $pending_count; ?></span>
+                <span class="tgs-badge"><?php echo $pending_count; ?></span>
             </h2>
         </div>
-        <p class="description" style="margin-top: 0;">
+        <p class="description">
             <?php esc_html_e('Các shop con đã gửi yêu cầu kết nối với shop này. Vui lòng phê duyệt hoặc từ chối.', 'tgs-sync-roll-up'); ?>
         </p>
 
-        <table class="wp-list-table widefat fixed striped" style="margin-top: 15px;">
+        <table class="wp-list-table widefat fixed striped">
             <thead>
                 <tr>
                     <th><?php esc_html_e('Shop con', 'tgs-sync-roll-up'); ?></th>
@@ -74,24 +74,24 @@ if (!defined('ABSPATH')) {
                 <?php foreach ($pending_requests as $request): ?>
                 <tr class="tgs-pending-request-row" data-blog-id="<?php echo esc_attr($request['blog_id']); ?>">
                     <td><strong><?php echo esc_html($request['blog_name']); ?></strong></td>
-                    <td><span style="color: #999;">#<?php echo esc_html($request['blog_id']); ?></span></td>
+                    <td><span class="tgs-blog-id">#<?php echo esc_html($request['blog_id']); ?></span></td>
                     <td><?php echo esc_html(TGS_Admin_Page::format_datetime($request['requested_at'])); ?></td>
                     <td>
-                        <div style="display: flex; gap: 8px; align-items: center;">
+                        <div class="tgs-request-actions">
                             <button type="button" class="button button-primary tgs-approve-request-btn"
                                     data-blog-id="<?php echo esc_attr($request['blog_id']); ?>"
                                     data-shop-name="<?php echo esc_attr($request['blog_name']); ?>">
-                                <span class="dashicons dashicons-yes" style="line-height: 1.4; vertical-align: middle;"></span>
+                                <span class="dashicons dashicons-yes"></span>
                                 <?php esc_html_e('Chấp nhận', 'tgs-sync-roll-up'); ?>
                             </button>
                             <button type="button" class="button button-secondary tgs-reject-request-btn"
                                     data-blog-id="<?php echo esc_attr($request['blog_id']); ?>"
                                     data-shop-name="<?php echo esc_attr($request['blog_name']); ?>">
-                                <span class="dashicons dashicons-no" style="line-height: 1.4; vertical-align: middle;"></span>
+                                <span class="dashicons dashicons-no"></span>
                                 <?php esc_html_e('Từ chối', 'tgs-sync-roll-up'); ?>
                             </button>
-                            <span class="spinner" style="float: none; margin: 0;"></span>
-                            <span class="tgs-request-message" style="font-size: 13px;"></span>
+                            <span class="spinner"></span>
+                            <span class="tgs-request-message"></span>
                         </div>
                     </td>
                 </tr>
@@ -260,12 +260,12 @@ if (!defined('ABSPATH')) {
                 <?php foreach ($shops_syncing_to_me as $shop_info): ?>
                 <tr>
                     <td><strong><?php echo esc_html($shop_info['blog_name']); ?></strong></td>
-                    <td><span style="color: #999;">#<?php echo esc_html($shop_info['blog_id']); ?></span></td>
+                    <td><span class="tgs-blog-id">#<?php echo esc_html($shop_info['blog_id']); ?></span></td>
                     <td>
                         <button type="button" class="button button-small tgs-view-child-detail"
                                 data-blog-id="<?php echo esc_attr($shop_info['blog_id']); ?>"
                                 data-shop-name="<?php echo esc_attr($shop_info['blog_name']); ?>">
-                            <span class="dashicons dashicons-visibility" style="vertical-align: middle;"></span>
+                            <span class="dashicons dashicons-visibility"></span>
                             <?php esc_html_e('Xem chi tiết', 'tgs-sync-roll-up'); ?>
                         </button>
                     </td>

@@ -20,7 +20,7 @@ if (!defined('ABSPATH')) {
                 <h2><?php esc_html_e('Cấu hình Shop Cha (Parent Shops)', 'tgs-sync-roll-up'); ?></h2>
             </div>
 
-            <p class="description" style="margin-top: 0;">
+            <p class="description">
                 <?php esc_html_e('Chọn shop cha để đồng bộ dữ liệu roll_up. Shop cha sẽ nhận dữ liệu tổng hợp từ shop này.', 'tgs-sync-roll-up'); ?>
             </p>
 
@@ -37,8 +37,8 @@ if (!defined('ABSPATH')) {
                     </th>
                     <td>
                         <?php if (!empty($all_blogs)): ?>
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <select name="parent_blog_id" id="parent_blog_id" class="tgs-select2" style="width: 100%; max-width: 400px;" <?php disabled($is_pending); ?>>
+                            <div class="tgs-parent-selection-wrapper">
+                                <select name="parent_blog_id" id="parent_blog_id" class="tgs-select2" <?php disabled($is_pending); ?>>
                                     <option value=""><?php esc_html_e('-- Không có shop cha --', 'tgs-sync-roll-up'); ?></option>
                                     <?php foreach ($all_blogs as $blog): ?>
                                         <?php if ($blog->blog_id != $blog_id): // Không cho chọn chính mình ?>
@@ -57,7 +57,7 @@ if (!defined('ABSPATH')) {
                                         <span id="tgs-save-parent-message" class="tgs-message"></span>
                                         <span class="spinner" id="tgs-parent-spinner"></span>
                                         <button type="button" class="button button-danger" id="tgs-cancel-parent-btn">
-                                            <span class="dashicons dashicons-no" style="line-height: 1.4;"></span>
+                                            <span class="dashicons dashicons-no"></span>
                                             <?php esc_html_e('Hủy Yêu Cầu', 'tgs-sync-roll-up'); ?>
                                         </button>
                                     </div>
@@ -67,7 +67,7 @@ if (!defined('ABSPATH')) {
                                         <span id="tgs-save-parent-message" class="tgs-message"></span>
                                         <span class="spinner" id="tgs-parent-spinner"></span>
                                         <button type="submit" class="button button-primary" id="tgs-request-parent-btn">
-                                            <span class="dashicons dashicons-admin-multisite" style="line-height: 1.4;"></span>
+                                            <span class="dashicons dashicons-admin-multisite"></span>
                                             <?php esc_html_e('Yêu Cầu', 'tgs-sync-roll-up'); ?>
                                         </button>
                                     </div>
@@ -75,13 +75,13 @@ if (!defined('ABSPATH')) {
                             </div>
 
                             <?php if ($is_pending): ?>
-                                <p class="description" style="color: #d63638; margin-top: 8px;">
-                                    <span class="dashicons dashicons-clock" style="vertical-align: middle;"></span>
+                                <p class="description tgs-parent-validation-warning">
+                                    <span class="dashicons dashicons-clock"></span>
                                     <?php esc_html_e('Yêu cầu đang chờ shop cha xác nhận.', 'tgs-sync-roll-up'); ?>
                                 </p>
                             <?php endif; ?>
 
-                            <p id="tgs-parent-validation-warning" class="tgs-validation-warning" style="display: none;">
+                            <p id="tgs-parent-validation-warning" class="tgs-validation-warning tgs-pending-status">
                                 <span class="dashicons dashicons-warning"></span>
                                 <span class="warning-text"></span>
                             </p>

@@ -582,3 +582,116 @@
     outline: none;
     box-shadow: 0 0 0 1px #007cba;
 }
+
+/* ========================================
+   Pending Requests Panel
+   ======================================== */
+.tgs-pending-requests {
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+}
+
+.tgs-pending-requests-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+
+.tgs-pending-requests-header h2 {
+    margin: 0;
+}
+
+.tgs-pending-requests-header .dashicons {
+    color: #ffc107;
+    vertical-align: middle;
+}
+
+.tgs-pending-requests-header .tgs-badge {
+    background: #ffc107;
+    color: #000;
+}
+
+.tgs-pending-requests .description {
+    margin-top: 0;
+}
+
+.tgs-pending-requests table {
+    margin-top: 15px;
+}
+
+/* ========================================
+   Request Actions
+   ======================================== */
+.tgs-request-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.tgs-request-actions .button .dashicons {
+    line-height: 1.4;
+    vertical-align: middle;
+}
+
+.tgs-request-actions .spinner {
+    float: none;
+    margin: 0;
+}
+
+.tgs-request-message {
+    font-size: 13px;
+}
+
+/* ========================================
+   Blog ID Display
+   ======================================== */
+.tgs-blog-id {
+    color: #999;
+}
+
+/* ========================================
+   Settings Page Specific
+   ======================================== */
+.tgs-parent-selection-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.tgs-parent-selection-wrapper select {
+    width: 100%;
+    max-width: 400px;
+}
+
+.tgs-parent-validation-warning {
+    color: #d63638;
+    margin-top: 8px;
+}
+
+.tgs-parent-validation-warning .dashicons {
+    vertical-align: middle;
+}
+
+.tgs-pending-status {
+    display: none;
+}
+
+/* ========================================
+   Logs Page Specific
+   ======================================== */
+.tgs-log-type-column {
+    width: 150px;
+}
+
+.tgs-log-status-column {
+    width: 100px;
+}
+
+.tgs-log-time-column {
+    width: 100px;
+}
+
+.tgs-log-detail-modal {
+    display: none;
+}

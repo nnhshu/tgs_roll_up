@@ -35,10 +35,10 @@ if (!defined('ABSPATH')) {
                 <table class="wp-list-table widefat fixed striped">
                     <thead>
                         <tr>
-                            <th style="width: 150px;"><?php esc_html_e('Thời gian', 'tgs-sync-roll-up'); ?></th>
-                            <th style="width: 100px;"><?php esc_html_e('Ngày sync', 'tgs-sync-roll-up'); ?></th>
-                            <th style="width: 100px;"><?php esc_html_e('Thành công', 'tgs-sync-roll-up'); ?></th>
-                            <th style="width: 100px;"><?php esc_html_e('Thất bại', 'tgs-sync-roll-up'); ?></th>
+                            <th class="tgs-log-type-column"><?php esc_html_e('Thời gian', 'tgs-sync-roll-up'); ?></th>
+                            <th class="tgs-log-status-column"><?php esc_html_e('Ngày sync', 'tgs-sync-roll-up'); ?></th>
+                            <th class="tgs-log-time-column"><?php esc_html_e('Thành công', 'tgs-sync-roll-up'); ?></th>
+                            <th class="tgs-log-time-column"><?php esc_html_e('Thất bại', 'tgs-sync-roll-up'); ?></th>
                             <th><?php esc_html_e('Chi tiết', 'tgs-sync-roll-up'); ?></th>
                         </tr>
                     </thead>
@@ -82,7 +82,7 @@ if (!defined('ABSPATH')) {
     </div>
 
     <!-- Cron Logs Tab -->
-    <div id="cron-logs" class="tgs-tab-content" style="display: none;">
+    <div id="cron-logs" class="tgs-tab-content tgs-log-detail-modal">
         <div class="tgs-panel">
             <h2><?php esc_html_e('Cron Logs', 'tgs-sync-roll-up'); ?></h2>
             <p class="description">
@@ -93,9 +93,9 @@ if (!defined('ABSPATH')) {
                 <table class="wp-list-table widefat fixed striped">
                     <thead>
                         <tr>
-                            <th style="width: 150px;"><?php esc_html_e('Thời gian', 'tgs-sync-roll-up'); ?></th>
-                            <th style="width: 100px;"><?php esc_html_e('Loại', 'tgs-sync-roll-up'); ?></th>
-                            <th style="width: 100px;"><?php esc_html_e('Trạng thái', 'tgs-sync-roll-up'); ?></th>
+                            <th class="tgs-log-type-column"><?php esc_html_e('Thời gian', 'tgs-sync-roll-up'); ?></th>
+                            <th class="tgs-log-status-column"><?php esc_html_e('Loại', 'tgs-sync-roll-up'); ?></th>
+                            <th class="tgs-log-time-column"><?php esc_html_e('Trạng thái', 'tgs-sync-roll-up'); ?></th>
                             <th><?php esc_html_e('Chi tiết', 'tgs-sync-roll-up'); ?></th>
                         </tr>
                     </thead>
