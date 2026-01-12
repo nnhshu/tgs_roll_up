@@ -41,11 +41,9 @@ class TGS_Roll_Up_Calculator
         $ledgers = $this->data_collector->get_ledgers_by_date($date);
 
         $ledgerIds = array_column($ledgers, 'local_ledger_id');
-        error_log('Ledger IDs: ' . implode(',', $ledgerIds));
 
         $childrenLedgers = $this->data_collector->get_children_ledgers($ledgerIds);
         $childrenLedgerIds = array_column($childrenLedgers, 'local_ledger_id');
-        error_log('Children Ledger IDs: ' . implode(',', $childrenLedgerIds));
 
         $ledgerItems = $this->data_collector->get_ledger_items($childrenLedgerIds);
 
@@ -925,7 +923,7 @@ class TGS_Roll_Up_Calculator
         // Build query
         $sql = "SELECT
                     local_product_name_id,
-                    SUM(amount) as total_amount,
+                    SUM(amount_after_tax) as total_amount,
                     SUM(quantity) as total_quantity,
                 FROM {$table}
                 WHERE {$where_clause}
@@ -1005,7 +1003,7 @@ class TGS_Roll_Up_Calculator
 
         // Nếu user chỉ định type cụ thể, sử dụng logic cũ (SUM amount với type đó)
         if (isset($options['type'])) {
-            $sql = "SELECT SUM(amount) as total_revenue
+            $sql = "SELECT SUM(amount_after_tax) as total_revenue
                     FROM {$table}
                     WHERE {$where_clause} AND type = %d";
             $prepare_values[] = $options['type'];
@@ -1028,8 +1026,8 @@ class TGS_Roll_Up_Calculator
 
         $sql = $wpdb->prepare(
             "SELECT
-                COALESCE(SUM(CASE WHEN type = %d THEN amount ELSE 0 END), 0) -
-                COALESCE(SUM(CASE WHEN type = %d THEN amount ELSE 0 END), 0) AS total_revenue
+                COALESCE(SUM(CASE WHEN type = %d THEN amount_after_tax ELSE 0 END), 0) -
+                COALESCE(SUM(CASE WHEN type = %d THEN amount_after_tax ELSE 0 END), 0) AS total_revenue
             FROM {$table}
             WHERE {$where_clause}",
             $prepare_values

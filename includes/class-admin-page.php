@@ -185,8 +185,6 @@ class TGS_Admin_Page
 
         // Lấy dữ liệu roll_up
         $today = current_time('Y-m-d');
-        error_log('=== FETCH DASHBOARD DATA ===');
-        error_log($today);
 
         // Tính tổng doanh thu hôm nay từ bảng roll_up
         $today_total_revenue = $this->calculator->get_total_revenue_sum($blog_id, $today, $today);
@@ -202,14 +200,6 @@ class TGS_Admin_Page
 
         // Lấy danh sách yêu cầu đang chờ approve
         $pending_requests = $this->get_pending_child_requests($blog_id);
-
-        error_log('=== RENDER DASHBOARD PAGE ===');
-        error_log('Current blog_id: ' . $blog_id);
-        error_log('Today: ' . $today);
-        error_log('Today total revenue: ' . $today_total_revenue);
-        error_log('Chart data count: ' . count($chart_data));
-        error_log('Shops syncing to me: ' . json_encode($shops_syncing_to_me));
-        error_log('Pending requests: ' . json_encode($pending_requests));
 
         include TGS_SYNC_ROLL_UP_PATH . 'admin/views/dashboard.php';
     }
@@ -777,8 +767,8 @@ class TGS_Admin_Page
         $results = $wpdb->get_results($wpdb->prepare(
             "SELECT
                 roll_up_date,
-                COALESCE(SUM(CASE WHEN type = %d THEN amount ELSE 0 END), 0) -
-                COALESCE(SUM(CASE WHEN type = %d THEN amount ELSE 0 END), 0) as total_revenue
+                COALESCE(SUM(CASE WHEN type = %d THEN amount_after_tax ELSE 0 END), 0) -
+                COALESCE(SUM(CASE WHEN type = %d THEN amount_after_tax ELSE 0 END), 0) as total_revenue
              FROM {$table}
              WHERE blog_id = %d
              AND roll_up_date BETWEEN %s AND %s

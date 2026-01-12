@@ -189,7 +189,6 @@ class TGS_Sync_Roll_Up_Data_Collector
 
         $table = TGS_TABLE_LOCAL_LEDGER_ITEM;
         $ids_placeholder = implode(',', array_map('intval', $ledger_ids));
-        error_log('Ledger IDs Placeholder: ' . $ids_placeholder);
 
         // Kiểm tra lại sau khi implode
         if (empty($ids_placeholder)) {
@@ -199,6 +198,31 @@ class TGS_Sync_Roll_Up_Data_Collector
         return $wpdb->get_results(
             "SELECT * FROM {$table}
             WHERE local_ledger_id IN ({$ids_placeholder})
+              AND is_deleted = 0");
+    }
+
+    /**
+     * Get ledger items by item IDs (mới - cho logic lấy từ local_ledger_item_id)
+     */
+    public function get_ledger_items_by_ids($item_ids)
+    {
+        global $wpdb;
+
+        if (!defined('TGS_TABLE_LOCAL_LEDGER_ITEM') || empty($item_ids)) {
+            return array();
+        }
+
+        $table = TGS_TABLE_LOCAL_LEDGER_ITEM;
+        $ids_placeholder = implode(',', array_map('intval', $item_ids));
+
+        // Kiểm tra lại sau khi implode
+        if (empty($ids_placeholder)) {
+            return array();
+        }
+
+        return $wpdb->get_results(
+            "SELECT * FROM {$table}
+            WHERE local_ledger_item_id IN ({$ids_placeholder})
               AND is_deleted = 0");
     }
 

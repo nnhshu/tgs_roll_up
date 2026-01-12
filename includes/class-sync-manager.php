@@ -750,7 +750,6 @@ class TGS_Sync_Manager
             }
         }
 
-        error_log("Saved " . count($saved_ids) . " roll_up records for blog_id {$blog_id} on {$today}");
         // Sync lên các shop cha
         $sync_result = $this->sync_to_parents($blog_id, $today);
 

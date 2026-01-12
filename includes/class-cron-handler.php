@@ -414,7 +414,7 @@ class TGS_Cron_Handler
         try {
             // Tính roll_up cho ngày đó (dữ liệu tự thân của shop)
             $own_roll_up = $this->calculator->calculate_daily_roll_up($blog_id, $date);
-            error_log('Own Roll Up: ' . print_r($own_roll_up, true));
+            
             // Lưu roll_up vào DB của chính shop này
             // calculate_daily_roll_up trả về array các records theo local_product_name_id
             $saved_ids = array();
