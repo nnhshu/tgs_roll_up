@@ -118,8 +118,12 @@ class TGS_Sync_Roll_Up_Data_Collector
 
     /**
      * Get all ledgers for a specific date
+     *
+     * @param string $date Ngày (Y-m-d)
+     * @param string $sync_type Loại đồng bộ: 'all', 'products', 'orders', 'inventory'
+     * @return array Danh sách ledgers
      */
-    public function get_ledgers_by_date($date)
+    public function get_ledgers_by_date($date, $sync_type = 'all')
     {
         global $wpdb;
 
@@ -129,18 +133,65 @@ class TGS_Sync_Roll_Up_Data_Collector
 
         $table = TGS_TABLE_LOCAL_LEDGER;
 
+        // Xác định loại ledger type dựa trên sync_type
+        $ledger_types = array();
+
+        switch ($sync_type) {
+            case 'orders':
+                // Chỉ đồng bộ đơn hàng (bán, mua, trả)
+                $ledger_types = array(
+                    TGS_LEDGER_TYPE_SALES,      // 10 - Bán hàng
+                    TGS_LEDGER_TYPE_RETURN,     // 11 - Trả hàng
+                    TGS_LEDGER_TYPE_PURCHASE    // 9 - Mua hàng
+                );
+                break;
+
+            case 'inventory':
+                // Chỉ đồng bộ tồn kho (nhập/xuất nội bộ, hàng hỏng)
+                $ledger_types = array(
+                    TGS_LEDGER_TYPE_IMPORT,     // 1 - Nhập nội bộ
+                    TGS_LEDGER_TYPE_EXPORT,     // 2 - Xuất nội bộ
+                    TGS_LEDGER_TYPE_DAMAGE      // 6 - Hàng hỏng
+                );
+                break;
+
+            case 'products':
+                // Sản phẩm: đồng bộ tất cả loại vì tất cả đều liên quan đến sản phẩm
+                $ledger_types = array(
+                    TGS_LEDGER_TYPE_IMPORT,
+                    TGS_LEDGER_TYPE_EXPORT,
+                    TGS_LEDGER_TYPE_DAMAGE,
+                    TGS_LEDGER_TYPE_PURCHASE,
+                    TGS_LEDGER_TYPE_SALES,
+                    TGS_LEDGER_TYPE_RETURN
+                );
+                break;
+
+            case 'all':
+            default:
+                // Mặc định: chỉ đồng bộ sales và return (logic cũ)
+                $ledger_types = array(
+                    TGS_LEDGER_TYPE_SALES,
+                    TGS_LEDGER_TYPE_RETURN
+                );
+                break;
+        }
+
+        // Tạo placeholders cho IN clause
+        $placeholders = implode(',', array_fill(0, count($ledger_types), '%d'));
+
+        $query = "SELECT * FROM {$table}
+                  WHERE DATE(created_at) = %s
+                    AND is_deleted = 0
+                    AND is_croned = 0
+                    AND local_ledger_type IN ({$placeholders})
+                  ORDER BY local_ledger_id ASC";
+
+        // Merge tham số: date + ledger_types
+        $params = array_merge(array($date), $ledger_types);
+
         return $wpdb->get_results(
-            $wpdb->prepare(
-                "SELECT * FROM {$table}
-                WHERE DATE(created_at) = %s
-                  AND is_deleted = 0
-                  AND is_croned = 0
-                  AND local_ledger_type IN (%d, %d)
-                ORDER BY local_ledger_id ASC",
-                $date,
-                TGS_LEDGER_TYPE_SALES,
-                TGS_LEDGER_TYPE_RETURN
-            )
+            $wpdb->prepare($query, $params)
         );
     }
 

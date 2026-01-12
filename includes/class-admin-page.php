@@ -570,12 +570,31 @@ class TGS_Admin_Page
 
         $blog_id = get_current_blog_id();
         $date = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : current_time('Y-m-d');
+        $sync_type = isset($_POST['sync_type']) ? sanitize_text_field($_POST['sync_type']) : 'all';
 
         try {
-            $result = $this->cron_handler->sync_specific_date($blog_id, $date);
+            $result = $this->cron_handler->sync_specific_date($blog_id, $date, $sync_type);
+
+            $message = __('Sync completed!', 'tgs-sync-roll-up');
+
+            // Tùy chỉnh thông báo dựa trên loại sync
+            switch ($sync_type) {
+                case 'products':
+                    $message = __('Đồng bộ sản phẩm hoàn tất!', 'tgs-sync-roll-up');
+                    break;
+                case 'orders':
+                    $message = __('Đồng bộ đơn hàng hoàn tất!', 'tgs-sync-roll-up');
+                    break;
+                case 'inventory':
+                    $message = __('Đồng bộ tồn kho hoàn tất!', 'tgs-sync-roll-up');
+                    break;
+                default:
+                    $message = __('Đồng bộ tất cả hoàn tất!', 'tgs-sync-roll-up');
+                    break;
+            }
 
             wp_send_json_success(array(
-                'message' => __('Sync completed!', 'tgs-sync-roll-up'),
+                'message' => $message,
                 'result' => $result,
             ));
         } catch (Exception $e) {

@@ -401,9 +401,10 @@ class TGS_Cron_Handler
      *
      * @param int $blog_id Blog ID
      * @param string $date Ngày (Y-m-d)
+     * @param string $sync_type Loại đồng bộ: 'all', 'products', 'orders', 'inventory'
      * @return array Kết quả
      */
-    public function sync_specific_date($blog_id, $date)
+    public function sync_specific_date($blog_id, $date, $sync_type = 'all')
     {
         $original_blog = get_current_blog_id();
 
@@ -413,8 +414,8 @@ class TGS_Cron_Handler
 
         try {
             // Tính roll_up cho ngày đó (dữ liệu tự thân của shop)
-            $own_roll_up = $this->calculator->calculate_daily_roll_up($blog_id, $date);
-            
+            $own_roll_up = $this->calculator->calculate_daily_roll_up($blog_id, $date, $sync_type);
+
             // Lưu roll_up vào DB của chính shop này
             // calculate_daily_roll_up trả về array các records theo local_product_name_id
             $saved_ids = array();
@@ -432,6 +433,7 @@ class TGS_Cron_Handler
                 'success' => true,
                 'blog_id' => $blog_id,
                 'date' => $date,
+                'sync_type' => $sync_type,
                 'saved_count' => count($saved_ids),
                 'sync_result' => $sync_result,
             );
@@ -440,6 +442,7 @@ class TGS_Cron_Handler
                 'success' => false,
                 'blog_id' => $blog_id,
                 'date' => $date,
+                'sync_type' => $sync_type,
                 'error' => $e->getMessage(),
             );
         }

@@ -27,10 +27,10 @@ define('TGS_SYNC_ROLL_UP_BASENAME', plugin_basename(__FILE__));
 
 // Ledger type constants (nếu chưa được định nghĩa bởi plugin tgs_shop_management)
 if (!defined('TGS_LEDGER_TYPE_IMPORT')) {
-    define('TGS_LEDGER_TYPE_IMPORT', 1);      // Nhập nội bộ
+    define('TGS_LEDGER_TYPE_IMPORT', 1);      // Nhập hàng
 }
 if (!defined('TGS_LEDGER_TYPE_EXPORT')) {
-    define('TGS_LEDGER_TYPE_EXPORT', 2);      // Xuất nội bộ
+    define('TGS_LEDGER_TYPE_EXPORT', 2);      // Xuất hàng
 }
 if (!defined('TGS_LEDGER_TYPE_DAMAGE')) {
     define('TGS_LEDGER_TYPE_DAMAGE', 6);      // Hàng hỏng

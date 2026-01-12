@@ -31,14 +31,15 @@ class TGS_Roll_Up_Calculator
      *
      * @param int $blog_id Blog ID
      * @param string $date Ngày cần tính (Y-m-d)
+     * @param string $sync_type Loại đồng bộ: 'all', 'products', 'orders', 'inventory'
      * @return array Dữ liệu roll_up
      */
-    public function calculate_daily_roll_up($blog_id, $date)
+    public function calculate_daily_roll_up($blog_id, $date, $sync_type = 'all')
     {
         global $wpdb;
 
-        // Lấy dữ liệu ledger theo ngày
-        $ledgers = $this->data_collector->get_ledgers_by_date($date);
+        // Lấy dữ liệu ledger theo ngày và loại sync
+        $ledgers = $this->data_collector->get_ledgers_by_date($date, $sync_type);
 
         $ledgerIds = array_column($ledgers, 'local_ledger_id');
 
