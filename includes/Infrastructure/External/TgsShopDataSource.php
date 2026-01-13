@@ -56,12 +56,12 @@ class TgsShopDataSource implements DataSourceInterface
         }
 
         $table = TGS_TABLE_LOCAL_LEDGER;
-        $where = ["DATE(date_created) = %s"];
+        $where = ["DATE(created_at) = %s"];
         $params = [$date];
 
         if (!empty($types)) {
             $placeholders = implode(',', array_fill(0, count($types), '%d'));
-            $where[] = "type IN ({$placeholders})";
+            $where[] = "local_ledger_type IN ({$placeholders})";
             $params = array_merge($params, $types);
         }
 
@@ -70,7 +70,7 @@ class TgsShopDataSource implements DataSourceInterface
         }
 
         $where_clause = implode(' AND ', $where);
-        $query = "SELECT * FROM {$table} WHERE {$where_clause} ORDER BY id ASC";
+        $query = "SELECT * FROM {$table} WHERE {$where_clause} ORDER BY local_ledger_id ASC";
 
         return $this->wpdb->get_results(
             $this->wpdb->prepare($query, ...$params),

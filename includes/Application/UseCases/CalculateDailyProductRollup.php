@@ -68,7 +68,7 @@ class CalculateDailyProductRollup
                 return [];
             }
 
-            $ledger_ids = array_column($ledgers, 'id');
+            $ledger_ids = array_column($ledgers, 'local_ledger_id');
             $items = $this->dataSource->getLedgerItems($ledger_ids);
 
             $items_by_ledger = [];
@@ -83,8 +83,8 @@ class CalculateDailyProductRollup
             $roll_up_data = [];
 
             foreach ($ledgers as $ledger) {
-                $ledger_id = $ledger['id'];
-                $ledger_type = intval($ledger['type']);
+                $ledger_id = $ledger['local_ledger_id'];
+                $ledger_type = intval($ledger['local_ledger_type']);
 
                 if (!isset($items_by_ledger[$ledger_id])) {
                     continue;

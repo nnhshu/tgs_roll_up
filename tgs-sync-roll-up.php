@@ -114,11 +114,16 @@ class TGS_Sync_Roll_Up
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Infrastructure/External/TgsShopDataSource.php';
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Infrastructure/Database/Repositories/ProductRollUpRepository.php';
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Infrastructure/Database/Repositories/ConfigRepository.php';
+        require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Infrastructure/Database/Repositories/InventoryRollUpRepository.php';
+        require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Infrastructure/Database/Repositories/OrderRollUpRepository.php';
 
         // New Architecture - Application
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Application/UseCases/CalculateDailyProductRollup.php';
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Application/UseCases/CalculateDailyInventory.php';
+        require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Application/UseCases/CalculateDailyOrder.php';
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Application/UseCases/SyncToParentShop.php';
+        require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Application/UseCases/SyncInventoryToParentShop.php';
+        require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Application/UseCases/SyncOrderToParentShop.php';
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Application/Services/CronService.php';
 
         // New Architecture - Extensions
