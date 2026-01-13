@@ -46,6 +46,34 @@ class DashboardAjaxHandler
     }
 
     /**
+     * Ensure all roll-up tables exist for current blog
+     */
+    private function ensureTablesExist(): void
+    {
+        global $wpdb;
+
+        $tables = [
+            $wpdb->prefix . 'product_roll_up',
+            $wpdb->prefix . 'inventory_roll_up',
+            $wpdb->prefix . 'order_roll_up'
+        ];
+
+        $needsCreation = false;
+        foreach ($tables as $table) {
+            $exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table));
+            if (!$exists) {
+                $needsCreation = true;
+                break;
+            }
+        }
+
+        if ($needsCreation) {
+            require_once TGS_SYNC_ROLL_UP_PATH . 'includes/class-database.php';
+            TGS_Sync_Roll_Up_Database::create_tables();
+        }
+    }
+
+    /**
      * Handle get dashboard data
      */
     public function handleGetDashboardData(): void
@@ -55,6 +83,9 @@ class DashboardAjaxHandler
         if (!current_user_can('manage_options')) {
             wp_send_json_error(['message' => __('Permission denied', 'tgs-sync-roll-up')]);
         }
+
+        // Ensure tables exist
+        $this->ensureTablesExist();
 
         $blogId = get_current_blog_id();
         $year = isset($_POST['year']) ? intval($_POST['year']) : intval(date('Y'));
@@ -149,6 +180,9 @@ class DashboardAjaxHandler
             wp_send_json_error(['message' => __('Permission denied', 'tgs-sync-roll-up')]);
         }
 
+        // Ensure tables exist
+        $this->ensureTablesExist();
+
         $blogId = get_current_blog_id();
         $fromDate = isset($_POST['from_date']) ? sanitize_text_field($_POST['from_date']) : current_time('Y-m-d');
         $toDate = isset($_POST['to_date']) ? sanitize_text_field($_POST['to_date']) : current_time('Y-m-d');
@@ -213,6 +247,9 @@ class DashboardAjaxHandler
         if (!current_user_can('manage_options')) {
             wp_send_json_error(['message' => __('Permission denied', 'tgs-sync-roll-up')]);
         }
+
+        // Ensure tables exist
+        $this->ensureTablesExist();
 
         $childBlogId = isset($_POST['child_blog_id']) ? intval($_POST['child_blog_id']) : 0;
         $year = isset($_POST['year']) ? intval($_POST['year']) : intval(date('Y'));
@@ -292,6 +329,9 @@ class DashboardAjaxHandler
         if (!current_user_can('manage_options')) {
             wp_send_json_error(['message' => __('Permission denied', 'tgs-sync-roll-up')]);
         }
+
+        // Ensure tables exist
+        $this->ensureTablesExist();
 
         $blogId = get_current_blog_id();
         $date = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : current_time('Y-m-d');

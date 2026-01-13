@@ -232,10 +232,15 @@ class TGS_Sync_Roll_Up_Database
         $inventory_roll_up_table = $wpdb->prefix . 'inventory_roll_up';
         $inventory_roll_up_table_exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $inventory_roll_up_table));
 
-        // If either table doesn't exist, create both
-        if (!$config_table_exists || !$roll_up_table_exists || !$inventory_roll_up_table_exists) {
+        // Check if order_roll_up table exists
+        $order_roll_up_table = $wpdb->prefix . 'order_roll_up';
+        $order_roll_up_table_exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $order_roll_up_table));
+
+        // If any table doesn't exist, create all tables
+        if (!$config_table_exists || !$roll_up_table_exists || !$inventory_roll_up_table_exists || !$order_roll_up_table_exists) {
             self::create_tables();
         }
+
 
         $config = $wpdb->get_row(
             $wpdb->prepare(

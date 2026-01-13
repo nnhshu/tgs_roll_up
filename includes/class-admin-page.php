@@ -813,6 +813,9 @@ class TGS_Admin_Page
     {
         global $wpdb;
 
+        // Ensure tables exist before querying
+        $this->database->get_config($blog_id);
+
         $table = $wpdb->prefix . 'product_roll_up';
         $end_date = current_time('Y-m-d');
         $start_date = date('Y-m-d', strtotime("-{$days} days"));

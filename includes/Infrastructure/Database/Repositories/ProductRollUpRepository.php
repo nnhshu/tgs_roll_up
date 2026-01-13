@@ -30,10 +30,25 @@ class ProductRollUpRepository implements RollUpRepositoryInterface
     }
 
     /**
+     * Ensure table exists
+     */
+    private function ensureTableExists(): void
+    {
+        $table = $this->wpdb->prefix . 'product_roll_up';
+        $exists = $this->wpdb->get_var($this->wpdb->prepare("SHOW TABLES LIKE %s", $table));
+
+        if (!$exists) {
+            require_once TGS_SYNC_ROLL_UP_PATH . 'includes/class-database.php';
+            TGS_Sync_Roll_Up_Database::create_tables();
+        }
+    }
+
+    /**
      * {@inheritdoc}
      */
     public function save(array $data, bool $overwrite = false): int
     {
+        $this->ensureTableExists();
         $table = $this->wpdb->prefix . 'product_roll_up';
 
         // Prepare data
@@ -97,6 +112,7 @@ class ProductRollUpRepository implements RollUpRepositoryInterface
      */
     public function findByBlogAndDate(int $blogId, string $date): ?array
     {
+        $this->ensureTableExists();
         $table = $this->wpdb->prefix . 'product_roll_up';
         $date_parts = explode('-', $date);
         $year = intval($date_parts[0]);
@@ -123,6 +139,7 @@ class ProductRollUpRepository implements RollUpRepositoryInterface
      */
     public function sumByDateRange(int $blogId, string $fromDate, string $toDate): array
     {
+        $this->ensureTableExists();
         $table = $this->wpdb->prefix . 'product_roll_up';
 
         $result = $this->wpdb->get_row($this->wpdb->prepare(
@@ -161,6 +178,7 @@ class ProductRollUpRepository implements RollUpRepositoryInterface
      */
     public function findByDateRange(int $blogId, string $fromDate, string $toDate): array
     {
+        $this->ensureTableExists();
         $table = $this->wpdb->prefix . 'product_roll_up';
 
         return $this->wpdb->get_results($this->wpdb->prepare(
@@ -179,6 +197,7 @@ class ProductRollUpRepository implements RollUpRepositoryInterface
      */
     public function deleteByDateRange(int $blogId, string $fromDate, string $toDate): bool
     {
+        $this->ensureTableExists();
         $table = $this->wpdb->prefix . 'product_roll_up';
 
         $result = $this->wpdb->query($this->wpdb->prepare(
@@ -208,6 +227,7 @@ class ProductRollUpRepository implements RollUpRepositoryInterface
      */
     public function getMeta(int $rollUpId): ?array
     {
+        $this->ensureTableExists();
         $table = $this->wpdb->prefix . 'product_roll_up';
 
         $meta = $this->wpdb->get_var($this->wpdb->prepare(
