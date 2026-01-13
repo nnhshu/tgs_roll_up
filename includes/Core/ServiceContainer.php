@@ -107,6 +107,14 @@ class ServiceContainer
             return new ConfigRepository();
         });
 
+        self::singleton('InventoryRollUpRepository', function() {
+            return new InventoryRollUpRepository();
+        });
+
+        self::singleton('OrderRollUpRepository', function() {
+            return new OrderRollUpRepository();
+        });
+
         // Application - Use Cases (không phải singleton, tạo mới mỗi lần)
         self::bind(CalculateDailyProductRollup::class, function() {
             return new CalculateDailyProductRollup(
@@ -130,12 +138,38 @@ class ServiceContainer
             );
         });
 
+        self::bind(SyncInventoryToParentShop::class, function() {
+            return new SyncInventoryToParentShop(
+                self::make('InventoryRollUpRepository'),
+                self::make(ConfigRepositoryInterface::class),
+                self::make('BlogContext')
+            );
+        });
+
+        self::bind(CalculateDailyOrder::class, function() {
+            return new CalculateDailyOrder(
+                self::make('BlogContext'),
+                self::make(DataSourceInterface::class)
+            );
+        });
+
+        self::bind(SyncOrderToParentShop::class, function() {
+            return new SyncOrderToParentShop(
+                self::make('OrderRollUpRepository'),
+                self::make(ConfigRepositoryInterface::class),
+                self::make('BlogContext')
+            );
+        });
+
         // Application - Services
         self::singleton(CronService::class, function() {
             return new CronService(
                 self::make(CalculateDailyProductRollup::class),
                 self::make(CalculateDailyInventory::class),
                 self::make(SyncToParentShop::class),
+                self::make(SyncInventoryToParentShop::class),
+                self::make(CalculateDailyOrder::class),
+                self::make(SyncOrderToParentShop::class),
                 self::make(ConfigRepositoryInterface::class)
             );
         });
@@ -144,7 +178,11 @@ class ServiceContainer
         self::singleton(SyncAjaxHandler::class, function() {
             return new SyncAjaxHandler(
                 self::make(CalculateDailyProductRollup::class),
-                self::make(SyncToParentShop::class)
+                self::make(CalculateDailyInventory::class),
+                self::make(SyncToParentShop::class),
+                self::make(SyncInventoryToParentShop::class),
+                self::make(CalculateDailyOrder::class),
+                self::make(SyncOrderToParentShop::class)
             );
         });
 

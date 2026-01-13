@@ -35,6 +35,21 @@ class CronService
     private $syncToParent;
 
     /**
+     * @var SyncInventoryToParentShop
+     */
+    private $syncInventoryToParent;
+
+    /**
+     * @var CalculateDailyOrder
+     */
+    private $calculateOrder;
+
+    /**
+     * @var SyncOrderToParentShop
+     */
+    private $syncOrderToParent;
+
+    /**
      * @var ConfigRepositoryInterface
      */
     private $configRepo;
@@ -46,11 +61,17 @@ class CronService
         CalculateDailyProductRollup $calculateRollUp,
         CalculateDailyInventory $calculateInventory,
         SyncToParentShop $syncToParent,
+        SyncInventoryToParentShop $syncInventoryToParent,
+        CalculateDailyOrder $calculateOrder,
+        SyncOrderToParentShop $syncOrderToParent,
         ConfigRepositoryInterface $configRepo
     ) {
         $this->calculateRollUp = $calculateRollUp;
         $this->calculateInventory = $calculateInventory;
         $this->syncToParent = $syncToParent;
+        $this->syncInventoryToParent = $syncInventoryToParent;
+        $this->calculateOrder = $calculateOrder;
+        $this->syncOrderToParent = $syncOrderToParent;
         $this->configRepo = $configRepo;
     }
 
@@ -95,14 +116,23 @@ class CronService
         $date = current_time('Y-m-d');
 
         try {
-            // 1. Calculate roll-up
+            // 1. Calculate product roll-up
             $this->calculateRollUp->execute($blogId, $date);
 
             // 2. Calculate inventory
             $this->calculateInventory->execute($blogId, $date);
 
-            // 3. Sync to parent (if configured)
+            // 3. Calculate orders
+            $this->calculateOrder->execute($blogId, $date);
+
+            // 4. Sync product roll-up to parent (if configured)
             $this->syncToParent->execute($blogId, $date);
+
+            // 5. Sync inventory to parent (if configured)
+            $this->syncInventoryToParent->syncByDate($blogId, $date);
+
+            // 6. Sync orders to parent (if configured)
+            $this->syncOrderToParent->syncByDate($blogId, $date);
 
             $this->logCron([
                 'blog_id' => $blogId,
@@ -193,8 +223,14 @@ class CronService
                 $result['inventory'] = $this->calculateInventory->execute($blogId, $date);
             }
 
+            if ($syncType === 'all' || $syncType === 'orders') {
+                $result['orders'] = $this->calculateOrder->execute($blogId, $date);
+            }
+
             if ($syncType === 'all') {
-                $result['sync'] = $this->syncToParent->execute($blogId, $date);
+                $result['sync_products'] = $this->syncToParent->execute($blogId, $date);
+                $result['sync_inventory'] = $this->syncInventoryToParent->syncByDate($blogId, $date);
+                $result['sync_orders'] = $this->syncOrderToParent->syncByDate($blogId, $date);
             }
 
             $result['status'] = 'success';
@@ -234,9 +270,12 @@ class CronService
             try {
                 $this->calculateRollUp->execute($blogId, $date);
                 $this->calculateInventory->execute($blogId, $date);
+                $this->calculateOrder->execute($blogId, $date);
 
                 if ($syncToParents) {
                     $this->syncToParent->execute($blogId, $date);
+                    $this->syncInventoryToParent->syncByDate($blogId, $date);
+                    $this->syncOrderToParent->syncByDate($blogId, $date);
                 }
 
                 $result['success']++;

@@ -19,19 +19,47 @@ class SyncAjaxHandler
     private $calculateUseCase;
 
     /**
+     * @var CalculateDailyInventory
+     */
+    private $calculateInventory;
+
+    /**
      * @var SyncToParentShop
      */
     private $syncUseCase;
+
+    /**
+     * @var SyncInventoryToParentShop
+     */
+    private $syncInventoryUseCase;
+
+    /**
+     * @var CalculateDailyOrder
+     */
+    private $calculateOrder;
+
+    /**
+     * @var SyncOrderToParentShop
+     */
+    private $syncOrderUseCase;
 
     /**
      * Constructor - sử dụng dependency injection
      */
     public function __construct(
         CalculateDailyProductRollup $calculateUseCase,
-        SyncToParentShop $syncUseCase
+        CalculateDailyInventory $calculateInventory,
+        SyncToParentShop $syncUseCase,
+        SyncInventoryToParentShop $syncInventoryUseCase,
+        CalculateDailyOrder $calculateOrder,
+        SyncOrderToParentShop $syncOrderUseCase
     ) {
         $this->calculateUseCase = $calculateUseCase;
+        $this->calculateInventory = $calculateInventory;
         $this->syncUseCase = $syncUseCase;
+        $this->syncInventoryUseCase = $syncInventoryUseCase;
+        $this->calculateOrder = $calculateOrder;
+        $this->syncOrderUseCase = $syncOrderUseCase;
     }
 
     /**
@@ -63,25 +91,41 @@ class SyncAjaxHandler
             // Fire sync started action
             do_action('tgs_sync_started', $blogId, $date);
 
-            // Calculate roll-up
+            // 1. Calculate product roll-up
             $type = ($syncType === 'all') ? null : intval($syncType);
             $savedIds = $this->calculateUseCase->execute($blogId, $date, $type);
 
-            // Sync to parent
+            // 2. Calculate inventory roll-up
+            $inventoryCount = $this->calculateInventory->execute($blogId, $date);
+
+            // 3. Calculate order roll-up
+            $orderResult = $this->calculateOrder->execute($blogId, $date);
+
+            // 4. Sync product roll-up to parent
             $syncResult = $this->syncUseCase->execute($blogId, $date);
+
+            // 5. Sync inventory to parent
+            $syncInventoryResult = $this->syncInventoryUseCase->syncByDate($blogId, $date);
+
+            // 6. Sync orders to parent
+            $syncOrderResult = $this->syncOrderUseCase->syncByDate($blogId, $date);
 
             $result = [
                 'blog_id' => $blogId,
                 'date' => $date,
-                'saved_count' => count($savedIds),
-                'sync_result' => $syncResult,
+                'product_saved_count' => count($savedIds),
+                'inventory_saved_count' => $inventoryCount,
+                'order_count' => $orderResult['daily'],
+                'sync_product_result' => $syncResult,
+                'sync_inventory_result' => $syncInventoryResult,
+                'sync_order_result' => $syncOrderResult,
             ];
 
             // Fire completed action
             do_action('tgs_sync_completed', $result, ['type' => $syncType]);
 
             wp_send_json_success([
-                'message' => __('Sync completed successfully!', 'tgs-sync-roll-up'),
+                'message' => __('Sync completed successfully! Products, inventory, and orders synced.', 'tgs-sync-roll-up'),
                 'result' => $result,
             ]);
 
@@ -127,12 +171,20 @@ class SyncAjaxHandler
                 $results['total']++;
 
                 try {
-                    // Calculate
+                    // 1. Calculate product roll-up
                     $this->calculateUseCase->execute($blogId, $date, null);
 
-                    // Sync nếu được yêu cầu
+                    // 2. Calculate inventory roll-up
+                    $this->calculateInventory->execute($blogId, $date);
+
+                    // 3. Calculate order roll-up
+                    $this->calculateOrder->execute($blogId, $date);
+
+                    // 4. Sync to parent if requested
                     if ($syncToParents) {
                         $this->syncUseCase->execute($blogId, $date);
+                        $this->syncInventoryUseCase->syncByDate($blogId, $date);
+                        $this->syncOrderUseCase->syncByDate($blogId, $date);
                     }
 
                     $results['success']++;
@@ -146,7 +198,7 @@ class SyncAjaxHandler
 
             wp_send_json_success([
                 'message' => sprintf(
-                    __('Rebuild completed! %d/%d days processed.', 'tgs-sync-roll-up'),
+                    __('Rebuild completed! %d/%d days processed (products, inventory & orders).', 'tgs-sync-roll-up'),
                     $results['success'],
                     $results['total']
                 ),

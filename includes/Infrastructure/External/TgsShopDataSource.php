@@ -172,12 +172,51 @@ class TgsShopDataSource implements DataSourceInterface
         $table = TGS_TABLE_LOCAL_LEDGER;
         $placeholders = implode(',', array_fill(0, count($ledgerIds), '%d'));
 
-        $query = "UPDATE {$table} SET is_croned = 1 WHERE id IN ({$placeholders})";
+        $query = "UPDATE {$table} SET is_croned = 1 WHERE local_ledger_id IN ({$placeholders})";
 
         $result = $this->wpdb->query(
             $this->wpdb->prepare($query, ...$ledgerIds)
         );
 
         return $result !== false;
+    }
+
+    /**
+     * Get orders (ledger type = 10 SALES)
+     *
+     * @param string $date Date (Y-m-d)
+     * @return array Orders
+     */
+    public function getOrders(string $date): array
+    {
+        if (!$this->isAvailable()) {
+            return [];
+        }
+
+        $table = TGS_TABLE_LOCAL_LEDGER;
+
+        $query = "SELECT *
+                  FROM {$table}
+                  WHERE DATE(created_at) = %s
+                  AND local_ledger_type = 10
+                  AND (is_deleted IS NULL OR is_deleted = 0)
+                  AND (is_croned IS NULL OR is_croned = 0)
+                  ORDER BY local_ledger_id ASC";
+
+        return $this->wpdb->get_results(
+            $this->wpdb->prepare($query, $date),
+            ARRAY_A
+        ) ?: [];
+    }
+
+    /**
+     * Mark orders as processed (is_croned = 1)
+     *
+     * @param array $ledgerIds Ledger IDs
+     * @return bool Success
+     */
+    public function markOrdersAsProcessed(array $ledgerIds): bool
+    {
+        return $this->markLedgersAsProcessed($ledgerIds);
     }
 }
