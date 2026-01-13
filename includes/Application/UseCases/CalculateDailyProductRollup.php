@@ -1,7 +1,7 @@
 <?php
 /**
- * Calculate Daily Roll-Up Use Case
- * Business logic cho việc tính toán roll-up hàng ngày
+ * Calculate Daily Product Roll-Up Use Case
+ * Business logic cho việc tính toán roll-up hàng ngày (sản phẩm)
  *
  * @package TGS_Sync_Roll_Up
  * @since 2.0.0
@@ -11,7 +11,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-class CalculateDailyRollUp
+class CalculateDailyProductRollup
 {
     /**
      * @var DataSourceInterface
@@ -56,26 +56,21 @@ class CalculateDailyRollUp
     public function execute(int $blogId, string $date, ?int $syncType = null): array
     {
         return $this->blogContext->executeInBlog($blogId, function() use ($blogId, $date, $syncType) {
-            // Kiểm tra data source có available không
             if (!$this->dataSource->isAvailable()) {
                 throw new Exception('Data source is not available');
             }
 
-            // Xác định các loại ledger cần xử lý
             $types = $this->getTypesToProcess($syncType);
 
-            // Lấy ledgers
             $ledgers = $this->dataSource->getLedgers($date, $types, true);
 
             if (empty($ledgers)) {
                 return [];
             }
 
-            // Lấy ledger items
             $ledger_ids = array_column($ledgers, 'id');
             $items = $this->dataSource->getLedgerItems($ledger_ids);
 
-            // Group items theo ledger_id
             $items_by_ledger = [];
             foreach ($items as $item) {
                 $ledger_id = $item['local_ledger_id'];
@@ -85,7 +80,6 @@ class CalculateDailyRollUp
                 $items_by_ledger[$ledger_id][] = $item;
             }
 
-            // Tính roll-up cho từng sản phẩm
             $roll_up_data = [];
 
             foreach ($ledgers as $ledger) {
@@ -118,7 +112,6 @@ class CalculateDailyRollUp
                     $roll_up_data[$key]['tax'] += floatval($item['tax'] ?? 0);
                     $roll_up_data[$key]['quantity'] += floatval($item['quantity'] ?? 0);
 
-                    // Lưu lot_ids
                     if (!empty($item['list_product_lots'])) {
                         $lots = json_decode($item['list_product_lots'], true);
                         if (is_array($lots)) {
@@ -132,19 +125,16 @@ class CalculateDailyRollUp
                 }
             }
 
-            // Lưu vào database
             $saved_ids = [];
             foreach ($roll_up_data as $data) {
-                // Unique lot_ids
                 $data['lot_ids'] = array_unique($data['lot_ids']);
 
-                $roll_up_id = $this->rollUpRepo->save($data, false); // Không overwrite, merge data
+                $roll_up_id = $this->rollUpRepo->save($data, false);
                 if ($roll_up_id) {
                     $saved_ids[] = $roll_up_id;
                 }
             }
 
-            // Đánh dấu ledgers đã xử lý
             $this->dataSource->markLedgersAsProcessed($ledger_ids);
 
             return $saved_ids;
@@ -163,7 +153,6 @@ class CalculateDailyRollUp
             return [$syncType];
         }
 
-        // Tất cả types
         return [
             TGS_LEDGER_TYPE_IMPORT,
             TGS_LEDGER_TYPE_EXPORT,

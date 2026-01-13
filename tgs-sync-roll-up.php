@@ -100,13 +100,8 @@ class TGS_Sync_Roll_Up
      */
     private function load_dependencies()
     {
-        // Legacy classes (sẽ được thay thế dần)
+        // Legacy - Only database class for table creation
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/class-database.php';
-        require_once TGS_SYNC_ROLL_UP_PATH . 'includes/class-data-collector.php';
-        require_once TGS_SYNC_ROLL_UP_PATH . 'includes/class-roll-up-calculator.php';
-        require_once TGS_SYNC_ROLL_UP_PATH . 'includes/class-inventory-calculator.php';
-        require_once TGS_SYNC_ROLL_UP_PATH . 'includes/class-sync-manager.php';
-        require_once TGS_SYNC_ROLL_UP_PATH . 'includes/class-cron-handler.php';
 
         // New Architecture - Core
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Core/Interfaces/DataSourceInterface.php';
@@ -121,8 +116,10 @@ class TGS_Sync_Roll_Up
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Infrastructure/Database/Repositories/ConfigRepository.php';
 
         // New Architecture - Application
-        require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Application/UseCases/CalculateDailyRollUp.php';
+        require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Application/UseCases/CalculateDailyProductRollup.php';
+        require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Application/UseCases/CalculateDailyInventory.php';
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Application/UseCases/SyncToParentShop.php';
+        require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Application/Services/CronService.php';
 
         // New Architecture - Extensions
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Extensions/SyncTypeRegistry.php';
@@ -131,15 +128,15 @@ class TGS_Sync_Roll_Up
         // New Architecture - Presentation
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Presentation/Ajax/SyncAjaxHandler.php';
 
-        if (is_admin()) {
-            require_once TGS_SYNC_ROLL_UP_PATH . 'includes/class-admin-page.php';
-        }
-
-        // Register services
+        // Register services BEFORE loading admin page
         ServiceContainer::registerServices();
 
         // Initialize filter hooks
         FilterHooks::init();
+
+        if (is_admin()) {
+            require_once TGS_SYNC_ROLL_UP_PATH . 'includes/class-admin-page.php';
+        }
     }
 
     /**
@@ -170,9 +167,13 @@ class TGS_Sync_Roll_Up
         // Create inventory_roll_up table
         $this->create_inventory_table();
 
-        // Schedule cron
-        $cron_handler = new TGS_Cron_Handler();
-        $cron_handler->schedule_crons();
+        // Schedule cron using new CronService
+        try {
+            $cronService = ServiceContainer::make(CronService::class);
+            $cronService->scheduleCrons();
+        } catch (Exception $e) {
+            error_log('TGS Sync: Failed to schedule crons - ' . $e->getMessage());
+        }
 
         flush_rewrite_rules();
     }
@@ -217,9 +218,13 @@ class TGS_Sync_Roll_Up
      */
     public function deactivate()
     {
-        // Clear scheduled cron
-        $cron_handler = new TGS_Cron_Handler();
-        $cron_handler->unschedule_crons();
+        // Clear scheduled cron using new CronService
+        try {
+            $cronService = ServiceContainer::make(CronService::class);
+            $cronService->unscheduleCrons();
+        } catch (Exception $e) {
+            error_log('TGS Sync: Failed to unschedule crons - ' . $e->getMessage());
+        }
 
         flush_rewrite_rules();
     }
@@ -232,7 +237,7 @@ class TGS_Sync_Roll_Up
         // Load text domain
         load_plugin_textdomain('tgs-sync-roll-up', false, dirname(TGS_SYNC_ROLL_UP_BASENAME) . '/languages');
 
-        // Initialize admin page (legacy)
+        // Initialize admin page (legacy - keeping for UI)
         if (is_admin()) {
             new TGS_Admin_Page();
 
@@ -244,19 +249,20 @@ class TGS_Sync_Roll_Up
                 error_log('TGS Sync Roll-Up: Failed to initialize AJAX handlers - ' . $e->getMessage());
             }
         }
-
-        // Initialize cron handler (legacy)
-        new TGS_Cron_Handler();
     }
 
 
     /**
-     * Run cron sync
+     * Run cron sync using new CronService
      */
     public function run_cron_sync()
     {
-        $cron_handler = new TGS_Cron_Handler();
-        $cron_handler->run_sync_cron();
+        try {
+            $cronService = ServiceContainer::make(CronService::class);
+            $cronService->runSyncCron();
+        } catch (Exception $e) {
+            error_log('TGS Sync: Cron failed - ' . $e->getMessage());
+        }
     }
 }
 

@@ -14,24 +14,34 @@ if (!defined('ABSPATH')) {
 class TGS_Admin_Page
 {
     /**
-     * Database instance
+     * Config repository
      */
-    private $database;
+    private $configRepo;
 
     /**
-     * Sync manager instance
+     * Roll-up repository
      */
-    private $sync_manager;
+    private $rollUpRepo;
 
     /**
-     * Cron handler instance
+     * Cron service
      */
-    private $cron_handler;
+    private $cronService;
 
     /**
-     * Calculator instance
+     * Sync use case
      */
-    private $calculator;
+    private $syncUseCase;
+
+    /**
+     * Calculate use case
+     */
+    private $calculateUseCase;
+
+    /**
+     * Calculate inventory use case
+     */
+    private $calculateInventory;
 
     /**
      * Menu slug
@@ -43,10 +53,23 @@ class TGS_Admin_Page
      */
     public function __construct()
     {
-        $this->database = new TGS_Sync_Roll_Up_Database();
-        $this->sync_manager = new TGS_Sync_Manager();
-        $this->cron_handler = new TGS_Cron_Handler();
-        $this->calculator = new TGS_Roll_Up_Calculator();
+        // Use ServiceContainer to get dependencies
+        try {
+            $this->configRepo = ServiceContainer::make(ConfigRepositoryInterface::class);
+            $this->rollUpRepo = ServiceContainer::make(RollUpRepositoryInterface::class);
+            $this->cronService = ServiceContainer::make(CronService::class);
+            $this->syncUseCase = ServiceContainer::make(SyncToParentShop::class);
+            $this->calculateUseCase = ServiceContainer::make(CalculateDailyProductRollup::class);
+            $this->calculateInventory = ServiceContainer::make(CalculateDailyInventory::class);
+        } catch (Exception $e) {
+            error_log('TGS Admin: Failed to initialize dependencies - ' . $e->getMessage());
+        }
+
+        // Create wrapper objects for backward compatibility
+        $this->database = $this->createDatabaseWrapper();
+        $this->sync_manager = $this->createSyncManagerWrapper();
+        $this->cron_handler = $this->createCronHandlerWrapper();
+        $this->calculator = $this->createCalculatorWrapper();
 
         // Hooks
         add_action('admin_menu', array($this, 'add_admin_menu'));
@@ -1061,5 +1084,117 @@ class TGS_Admin_Page
             'inventory' => $inventory,
             'date' => $date,
         ));
+    }
+
+    /**
+     * Create database wrapper for backward compatibility
+     */
+    private function createDatabaseWrapper()
+    {
+        $configRepo = $this->configRepo;
+
+        return new class($configRepo) {
+            private $configRepo;
+
+            public function __construct($configRepo) {
+                $this->configRepo = $configRepo;
+            }
+
+            public function get_config($blogId) {
+                return $this->configRepo->getConfig($blogId);
+            }
+
+            public function get_sync_status($blogId) {
+                return $this->configRepo->getSyncStatus($blogId);
+            }
+
+            public function save_config($data, $blogId) {
+                return $this->configRepo->saveConfig($blogId, $data);
+            }
+
+            public function get_all_blogs() {
+                $blogContext = ServiceContainer::make('BlogContext');
+                return $blogContext->getAllBlogs();
+            }
+        };
+    }
+
+    /**
+     * Create sync manager wrapper
+     */
+    private function createSyncManagerWrapper()
+    {
+        return new class() {
+            public function get_recent_sync_logs($blogId, $limit) {
+                $logOption = 'tgs_sync_log_' . $blogId;
+                $logs = get_option($logOption, []);
+                return array_slice(array_reverse($logs), 0, $limit);
+            }
+        };
+    }
+
+    /**
+     * Create cron handler wrapper
+     */
+    private function createCronHandlerWrapper()
+    {
+        $cronService = $this->cronService;
+
+        return new class($cronService) {
+            private $cronService;
+
+            public function __construct($cronService) {
+                $this->cronService = $cronService;
+            }
+
+            public function get_next_scheduled() {
+                return $this->cronService->getNextScheduled();
+            }
+
+            public function update_cron_frequency($frequency) {
+                return $this->cronService->updateCronFrequency($frequency);
+            }
+
+            public function sync_specific_date($blogId, $date, $syncType) {
+                return $this->cronService->syncSpecificDate($blogId, $date, $syncType);
+            }
+
+            public function rebuild_date_range($blogId, $startDate, $endDate, $syncToParents) {
+                return $this->cronService->rebuildDateRange($blogId, $startDate, $endDate, $syncToParents);
+            }
+
+            public function get_recent_cron_logs($limit) {
+                return $this->cronService->getRecentCronLogs($limit);
+            }
+        };
+    }
+
+    /**
+     * Create calculator wrapper
+     */
+    private function createCalculatorWrapper()
+    {
+        $rollUpRepo = $this->rollUpRepo;
+
+        return new class($rollUpRepo) {
+            private $rollUpRepo;
+
+            public function __construct($rollUpRepo) {
+                $this->rollUpRepo = $rollUpRepo;
+            }
+
+            public function get_total_revenue_sum($blogId, $fromDate, $toDate) {
+                $result = $this->rollUpRepo->sumByDateRange($blogId, $fromDate, $toDate);
+                return $result['revenue'] ?? 0;
+            }
+
+            public function get_roll_up($blogId, $date) {
+                return $this->rollUpRepo->findByBlogAndDate($blogId, $date);
+            }
+
+            public function get_stats_by_date_range($blogId, $fromDate, $toDate) {
+                return $this->rollUpRepo->sumByDateRange($blogId, $fromDate, $toDate);
+            }
+        };
     }
 }

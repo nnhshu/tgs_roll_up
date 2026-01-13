@@ -14,7 +14,7 @@ if (!defined('ABSPATH')) {
 class SyncAjaxHandler
 {
     /**
-     * @var CalculateDailyRollUp
+     * @var CalculateDailyProductRollup
      */
     private $calculateUseCase;
 
@@ -27,7 +27,7 @@ class SyncAjaxHandler
      * Constructor - sử dụng dependency injection
      */
     public function __construct(
-        CalculateDailyRollUp $calculateUseCase,
+        CalculateDailyProductRollup $calculateUseCase,
         SyncToParentShop $syncUseCase
     ) {
         $this->calculateUseCase = $calculateUseCase;

@@ -108,10 +108,16 @@ class ServiceContainer
         });
 
         // Application - Use Cases (không phải singleton, tạo mới mỗi lần)
-        self::bind(CalculateDailyRollUp::class, function() {
-            return new CalculateDailyRollUp(
+        self::bind(CalculateDailyProductRollup::class, function() {
+            return new CalculateDailyProductRollup(
                 self::make(DataSourceInterface::class),
                 self::make(RollUpRepositoryInterface::class),
+                self::make('BlogContext')
+            );
+        });
+
+        self::bind(CalculateDailyInventory::class, function() {
+            return new CalculateDailyInventory(
                 self::make('BlogContext')
             );
         });
@@ -124,10 +130,20 @@ class ServiceContainer
             );
         });
 
+        // Application - Services
+        self::singleton(CronService::class, function() {
+            return new CronService(
+                self::make(CalculateDailyProductRollup::class),
+                self::make(CalculateDailyInventory::class),
+                self::make(SyncToParentShop::class),
+                self::make(ConfigRepositoryInterface::class)
+            );
+        });
+
         // Presentation - AJAX Handlers
         self::singleton(SyncAjaxHandler::class, function() {
             return new SyncAjaxHandler(
-                self::make(CalculateDailyRollUp::class),
+                self::make(CalculateDailyProductRollup::class),
                 self::make(SyncToParentShop::class)
             );
         });
