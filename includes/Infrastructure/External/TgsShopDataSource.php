@@ -51,6 +51,7 @@ class TgsShopDataSource implements DataSourceInterface
      */
     public function getLedgers(string $date, array $types = [], bool $processedOnly = false): array
     {
+        error_log("types: " . implode(',', $types));
         if (!$this->isAvailable()) {
             return [];
         }

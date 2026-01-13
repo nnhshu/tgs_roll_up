@@ -126,7 +126,8 @@ class ServiceContainer
 
         self::bind(CalculateDailyInventory::class, function() {
             return new CalculateDailyInventory(
-                self::make('BlogContext')
+                self::make('BlogContext'),
+                self::make(DataSourceInterface::class)
             );
         });
 

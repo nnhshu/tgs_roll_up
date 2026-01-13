@@ -154,12 +154,8 @@ class CalculateDailyProductRollup
         }
 
         return [
-            TGS_LEDGER_TYPE_IMPORT,
-            TGS_LEDGER_TYPE_EXPORT,
-            TGS_LEDGER_TYPE_DAMAGE,
-            TGS_LEDGER_TYPE_PURCHASE,
-            TGS_LEDGER_TYPE_SALES,
-            TGS_LEDGER_TYPE_RETURN,
+            TGS_LEDGER_TYPE_SALES,     // 10 - Bán hàng (dùng cho dashboard & order)
+            11,    // 11 - Hoàn trả (dùng cho dashboard)
         ];
     }
 }
