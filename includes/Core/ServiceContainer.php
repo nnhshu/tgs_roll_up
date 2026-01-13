@@ -115,6 +115,10 @@ class ServiceContainer
             return new OrderRollUpRepository();
         });
 
+        self::singleton('AccountingRollUpRepository', function() {
+            return new AccountingRollUpRepository();
+        });
+
         // Application - Use Cases (không phải singleton, tạo mới mỗi lần)
         self::bind(CalculateDailyProductRollup::class, function() {
             return new CalculateDailyProductRollup(
@@ -162,6 +166,21 @@ class ServiceContainer
             );
         });
 
+        self::bind(CalculateDailyAccounting::class, function() {
+            return new CalculateDailyAccounting(
+                self::make('BlogContext'),
+                self::make(DataSourceInterface::class)
+            );
+        });
+
+        self::bind(SyncAccountingToParentShop::class, function() {
+            return new SyncAccountingToParentShop(
+                self::make('AccountingRollUpRepository'),
+                self::make(ConfigRepositoryInterface::class),
+                self::make('BlogContext')
+            );
+        });
+
         // Application - Services
         self::singleton(CronService::class, function() {
             return new CronService(
@@ -171,6 +190,8 @@ class ServiceContainer
                 self::make(SyncInventoryToParentShop::class),
                 self::make(CalculateDailyOrder::class),
                 self::make(SyncOrderToParentShop::class),
+                self::make(CalculateDailyAccounting::class),
+                self::make(SyncAccountingToParentShop::class),
                 self::make(ConfigRepositoryInterface::class),
                 self::make(DataSourceInterface::class)
             );

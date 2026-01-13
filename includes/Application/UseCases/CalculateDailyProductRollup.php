@@ -69,8 +69,11 @@ class CalculateDailyProductRollup
             }
 
             $ledger_ids = array_column($ledgers, 'local_ledger_id');
-            $items = $this->dataSource->getLedgerItems($ledger_ids);
 
+            // Truyền toàn bộ ledgers thay vì chỉ ledger_ids để lấy item IDs từ JSON
+            $items = $this->dataSource->getLedgerItems($ledgers);
+            error_log("12313");
+            error_log(json_encode($items));
             $items_by_ledger = [];
             foreach ($items as $item) {
                 $ledger_id = $item['local_ledger_id'];
@@ -90,6 +93,7 @@ class CalculateDailyProductRollup
                     continue;
                 }
 
+                
                 foreach ($items_by_ledger[$ledger_id] as $item) {
                     $product_id = $item['local_product_name_id'];
                     $key = $product_id . '_' . $ledger_type;
@@ -108,9 +112,20 @@ class CalculateDailyProductRollup
                         ];
                     }
 
-                    $roll_up_data[$key]['amount_after_tax'] += floatval($item['amount_after_tax'] ?? 0);
-                    $roll_up_data[$key]['tax'] += floatval($item['tax'] ?? 0);
-                    $roll_up_data[$key]['quantity'] += floatval($item['quantity'] ?? 0);
+                    // Tính toán từ các trường thực tế trong local_ledger_item
+                    $quantity = floatval($item['quantity'] ?? 0);
+                    $price = floatval($item['price'] ?? 0);
+                    $tax = floatval($item['local_ledger_item_tax_amount'] ?? 0);
+
+                    // Công thức theo yêu cầu:
+                    // amount_after_tax += price * quantity - local_ledger_item_tax_amount
+                    // tax += local_ledger_item_tax_amount
+                    // quantity += quantity
+                    $amount_after_tax = ($price * $quantity) - $tax;
+
+                    $roll_up_data[$key]['amount_after_tax'] += $amount_after_tax;
+                    $roll_up_data[$key]['tax'] += $tax;
+                    $roll_up_data[$key]['quantity'] += $quantity;
 
                     if (!empty($item['list_product_lots'])) {
                         $lots = json_decode($item['list_product_lots'], true);
@@ -125,6 +140,7 @@ class CalculateDailyProductRollup
                 }
             }
 
+            error_log(json_encode($roll_up_data));
             $saved_ids = [];
             foreach ($roll_up_data as $data) {
                 $data['lot_ids'] = array_unique($data['lot_ids']);

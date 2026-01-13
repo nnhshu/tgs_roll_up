@@ -80,21 +80,31 @@ class CalculateDailyOrder
                 $ledgerIds[] = $order['local_ledger_id'];
             }
 
-            // Save daily order roll-up
-            $insertData = [
-                'blog_id' => $blogId,
-                'roll_up_date' => $date,
-                'roll_up_day' => $day,
-                'roll_up_month' => $month,
-                'roll_up_year' => $year,
-                'count' => $orderCount,
-                'value' => $orderValue,
-                'meta' => json_encode(['ledger_ids' => $ledgerIds]),
-                'created_at' => current_time('mysql'),
-                'updated_at' => current_time('mysql'),
-            ];
+            // Save daily order roll-up using INSERT ... ON DUPLICATE KEY UPDATE để cộng dồn
+            $metaJson = json_encode(['ledger_ids' => $ledgerIds]);
+            $createdAt = current_time('mysql');
+            $updatedAt = current_time('mysql');
 
-            $this->wpdb->replace($orderRollUpTable, $insertData);
+            $this->wpdb->query($this->wpdb->prepare(
+                "INSERT INTO {$orderRollUpTable}
+                (blog_id, roll_up_date, roll_up_day, roll_up_month, roll_up_year, count, value, meta, created_at, updated_at)
+                VALUES (%d, %s, %d, %d, %d, %d, %f, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    count = count + VALUES(count),
+                    value = value + VALUES(value),
+                    meta = JSON_MERGE_PRESERVE(COALESCE(meta, '{}'), VALUES(meta)),
+                    updated_at = VALUES(updated_at)",
+                $blogId,
+                $date,
+                $day,
+                $month,
+                $year,
+                $orderCount,
+                $orderValue,
+                $metaJson,
+                $createdAt,
+                $updatedAt
+            ));
 
             // Không đánh cờ is_croned ở đây nữa, trả về ledger_ids để CronService xử lý
 

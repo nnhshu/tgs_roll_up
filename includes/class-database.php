@@ -77,6 +77,9 @@ class TGS_Sync_Roll_Up_Database
 
         // 4. Tạo bảng order_roll_up cho site hiện tại đang activate plugin
         self::create_order_roll_up_table($current_blog_id);
+
+        // 5. Tạo bảng accounting_roll_up cho site hiện tại đang activate plugin
+        self::create_accounting_roll_up_table($current_blog_id);
     }
 
     /**
@@ -188,6 +191,40 @@ class TGS_Sync_Roll_Up_Database
         dbDelta($sql);
     }
 
+    /**
+     * Tạo bảng accounting_roll_up cho một blog cụ thể
+     *
+     * @param int $blog_id Blog ID
+     */
+    public static function create_accounting_roll_up_table($blog_id)
+    {
+        global $wpdb;
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+
+        $charset_collate = $wpdb->get_charset_collate();
+        $table_name = $wpdb->prefix . 'accounting_roll_up';
+
+        $sql = "CREATE TABLE $table_name (
+            roll_up_id BIGINT NOT NULL AUTO_INCREMENT,
+            blog_id BIGINT,
+            roll_up_date DATE NOT NULL,
+            roll_up_day INT NOT NULL,
+            roll_up_month INT NOT NULL,
+            roll_up_year INT NOT NULL,
+            total_income DECIMAL(15,2) DEFAULT 0.00,
+            total_expense DECIMAL(15,2) DEFAULT 0.00,
+            meta JSON,
+            created_at DATETIME NOT NULL,
+            updated_at DATETIME,
+
+            PRIMARY KEY (roll_up_id),
+            UNIQUE KEY uk_blog_day_month_year (blog_id, roll_up_day, roll_up_month, roll_up_year),
+            KEY idx_blog_id (blog_id)
+        ) $charset_collate;";
+
+        dbDelta($sql);
+    }
+
 
     /**
      * Drop tables
@@ -236,8 +273,12 @@ class TGS_Sync_Roll_Up_Database
         $order_roll_up_table = $wpdb->prefix . 'order_roll_up';
         $order_roll_up_table_exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $order_roll_up_table));
 
+        // Check if accounting_roll_up table exists
+        $accounting_roll_up_table = $wpdb->prefix . 'accounting_roll_up';
+        $accounting_roll_up_table_exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $accounting_roll_up_table));
+
         // If any table doesn't exist, create all tables
-        if (!$config_table_exists || !$roll_up_table_exists || !$inventory_roll_up_table_exists || !$order_roll_up_table_exists) {
+        if (!$config_table_exists || !$roll_up_table_exists || !$inventory_roll_up_table_exists || !$order_roll_up_table_exists || !$accounting_roll_up_table_exists) {
             self::create_tables();
         }
 

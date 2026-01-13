@@ -70,6 +70,10 @@ class TgsShopDataSource implements DataSourceInterface
             $where[] = "(is_croned IS NULL OR is_croned = 0)";
         }
 
+        // Thêm điều kiện: is_croned = 0 và local_ledger_status = 4
+        $where[] = "(is_croned IS NULL OR is_croned = 0)";
+        $where[] = "local_ledger_status = 4";
+
         $where_clause = implode(' AND ', $where);
         $query = "SELECT * FROM {$table} WHERE {$where_clause} ORDER BY local_ledger_id ASC";
 
@@ -81,10 +85,13 @@ class TgsShopDataSource implements DataSourceInterface
 
     /**
      * {@inheritdoc}
+     *
+     * @param array $ledgers Array of ledger records (containing local_ledger_item_id column)
+     * @return array Array of ledger items
      */
-    public function getLedgerItems(array $ledgerIds): array
+    public function getLedgerItems(array $ledgers): array
     {
-        if (!$this->isAvailable() || empty($ledgerIds)) {
+        if (!$this->isAvailable() || empty($ledgers)) {
             return [];
         }
 
@@ -92,13 +99,31 @@ class TgsShopDataSource implements DataSourceInterface
             return [];
         }
 
-        $table = TGS_TABLE_LOCAL_LEDGER_ITEM;
-        $placeholders = implode(',', array_fill(0, count($ledgerIds), '%d'));
+        // Thu thập tất cả item IDs từ cột local_ledger_item_id (JSON format)
+        $allItemIds = [];
+        foreach ($ledgers as $ledger) {
+            if (!empty($ledger['local_ledger_item_id'])) {
+                $itemIds = json_decode($ledger['local_ledger_item_id'], true);
+                if (is_array($itemIds)) {
+                    $allItemIds = array_merge($allItemIds, $itemIds);
+                }
+            }
+        }
 
-        $query = "SELECT * FROM {$table} WHERE local_ledger_id IN ({$placeholders})";
+        // Loại bỏ duplicate
+        $allItemIds = array_unique($allItemIds);
+        error_log("Fetching ledger items: " . implode(',', $allItemIds));
+        if (empty($allItemIds)) {
+            return [];
+        }
+
+        $table = TGS_TABLE_LOCAL_LEDGER_ITEM;
+        $placeholders = implode(',', array_fill(0, count($allItemIds), '%d'));
+
+        $query = "SELECT * FROM {$table} WHERE local_ledger_item_id IN ({$placeholders})";
 
         return $this->wpdb->get_results(
-            $this->wpdb->prepare($query, ...$ledgerIds),
+            $this->wpdb->prepare($query, ...$allItemIds),
             ARRAY_A
         ) ?: [];
     }

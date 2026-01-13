@@ -24,12 +24,13 @@ interface DataSourceInterface
     public function getLedgers(string $date, array $types = [], bool $processedOnly = false): array;
 
     /**
-     * Lấy ledger items theo ledger IDs
+     * Lấy ledger items từ ledgers
+     * Parse cột local_ledger_item_id (JSON format) để lấy item IDs
      *
-     * @param array $ledgerIds Mảng ledger IDs
+     * @param array $ledgers Mảng ledger records (chứa cột local_ledger_item_id)
      * @return array Danh sách ledger items
      */
-    public function getLedgerItems(array $ledgerIds): array;
+    public function getLedgerItems(array $ledgers): array;
 
     /**
      * Lấy danh sách products

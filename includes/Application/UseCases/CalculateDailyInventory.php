@@ -67,6 +67,10 @@ class CalculateDailyInventory
 
             $inventoryTable = $this->wpdb->prefix . 'inventory_roll_up';
 
+            // BƯỚC 1: Duplicate các record của ngày hôm trước và thay bằng ngày hôm nay
+            // Điều này đảm bảo hàng tồn được cộng dồn từ ngày hôm trước
+            $this->duplicateYesterdayInventory($blogId, $date);
+
             // Lấy ledgers với type 1, 2, 6
             $types = [
                 TGS_LEDGER_TYPE_IMPORT,  // 1 - Nhập hàng
@@ -84,8 +88,8 @@ class CalculateDailyInventory
             // Lấy ledger IDs
             $ledgerIds = array_column($ledgers, 'local_ledger_id');
 
-            // Lấy items từ local_ledger_item
-            $items = $this->dataSource->getLedgerItems($ledgerIds);
+            // Lấy items từ local_ledger_item (truyền toàn bộ ledgers để parse JSON local_ledger_item_id)
+            $items = $this->dataSource->getLedgerItems($ledgers);
 
             if (empty($items)) {
                 error_log("No items found for ledgers");
@@ -102,6 +106,8 @@ class CalculateDailyInventory
                 $itemsByLedger[$ledgerId][] = $item;
             }
 
+            error_log("Calculating inventory from ledgers and items");
+            error_log(json_encode($itemsByLedger));
             // Tính inventory theo product
             $dailyInventory = [];
 
@@ -278,5 +284,93 @@ class CalculateDailyInventory
             current_time('mysql'),
             current_time('mysql')
         ));
+    }
+
+    /**
+     * Duplicate yesterday's inventory to today
+     * Nếu ngày hôm trước có tồn kho, copy sang ngày hôm nay để tính tồn luỹ kế
+     *
+     * @param int $blogId Blog ID
+     * @param string $date Date (Y-m-d)
+     */
+    private function duplicateYesterdayInventory(int $blogId, string $date): void
+    {
+        $inventoryTable = $this->wpdb->prefix . 'inventory_roll_up';
+
+        // Tính ngày hôm trước
+        $yesterday = date('Y-m-d', strtotime($date . ' -1 day'));
+        $yesterdayParts = explode('-', $yesterday);
+        $yesterdayYear = intval($yesterdayParts[0]);
+        $yesterdayMonth = intval($yesterdayParts[1]);
+        $yesterdayDay = intval($yesterdayParts[2]);
+
+        // Tính ngày hôm nay
+        $dateParts = explode('-', $date);
+        $year = intval($dateParts[0]);
+        $month = intval($dateParts[1]);
+        $day = intval($dateParts[2]);
+
+        // Kiểm tra xem ngày hôm nay đã có inventory chưa
+        $existingToday = $this->wpdb->get_results($this->wpdb->prepare(
+            "SELECT local_product_name_id FROM {$inventoryTable}
+             WHERE blog_id = %d
+             AND roll_up_year = %d
+             AND roll_up_month = %d
+             AND roll_up_day = %d",
+            $blogId,
+            $year,
+            $month,
+            $day
+        ), ARRAY_A);
+
+        // Nếu đã có inventory ngày hôm nay, không cần duplicate
+        if (!empty($existingToday)) {
+            return;
+        }
+
+        // Lấy tất cả inventory của ngày hôm trước
+        $yesterdayInventory = $this->wpdb->get_results($this->wpdb->prepare(
+            "SELECT * FROM {$inventoryTable}
+             WHERE blog_id = %d
+             AND roll_up_year = %d
+             AND roll_up_month = %d
+             AND roll_up_day = %d",
+            $blogId,
+            $yesterdayYear,
+            $yesterdayMonth,
+            $yesterdayDay
+        ), ARRAY_A);
+
+        // Nếu ngày hôm trước không có tồn kho, không làm gì
+        if (empty($yesterdayInventory)) {
+            return;
+        }
+
+        // Duplicate từng product từ ngày hôm trước sang ngày hôm nay
+        foreach ($yesterdayInventory as $record) {
+            $this->wpdb->query($this->wpdb->prepare(
+                "INSERT INTO {$inventoryTable}
+                (blog_id, local_product_name_id, global_product_name_id,
+                 roll_up_date, roll_up_day, roll_up_month, roll_up_year,
+                 inventory_qty, inventory_value, meta, created_at, updated_at)
+                VALUES (%d, %d, %d, %s, %d, %d, %d, %f, %f, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    inventory_qty = VALUES(inventory_qty),
+                    inventory_value = VALUES(inventory_value),
+                    updated_at = VALUES(updated_at)",
+                $blogId,
+                $record['local_product_name_id'],
+                $record['global_product_name_id'],
+                $date,
+                $day,
+                $month,
+                $year,
+                $record['inventory_qty'],
+                $record['inventory_value'],
+                $record['meta'],
+                current_time('mysql'),
+                current_time('mysql')
+            ));
+        }
     }
 }
