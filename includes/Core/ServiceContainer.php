@@ -205,7 +205,10 @@ class ServiceContainer
                 self::make(SyncToParentShop::class),
                 self::make(SyncInventoryToParentShop::class),
                 self::make(CalculateDailyOrder::class),
-                self::make(SyncOrderToParentShop::class)
+                self::make(SyncOrderToParentShop::class),
+                self::make(CalculateDailyAccounting::class),
+                self::make(SyncAccountingToParentShop::class),
+                self::make(DataSourceInterface::class)
             );
         });
 

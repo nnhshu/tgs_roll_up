@@ -44,6 +44,21 @@ class SyncAjaxHandler
     private $syncOrderUseCase;
 
     /**
+     * @var CalculateDailyAccounting
+     */
+    private $calculateAccounting;
+
+    /**
+     * @var SyncAccountingToParentShop
+     */
+    private $syncAccountingUseCase;
+
+    /**
+     * @var DataSourceInterface
+     */
+    private $dataSource;
+
+    /**
      * Constructor - sử dụng dependency injection
      */
     public function __construct(
@@ -52,7 +67,10 @@ class SyncAjaxHandler
         SyncToParentShop $syncUseCase,
         SyncInventoryToParentShop $syncInventoryUseCase,
         CalculateDailyOrder $calculateOrder,
-        SyncOrderToParentShop $syncOrderUseCase
+        SyncOrderToParentShop $syncOrderUseCase,
+        CalculateDailyAccounting $calculateAccounting,
+        SyncAccountingToParentShop $syncAccountingUseCase,
+        DataSourceInterface $dataSource
     ) {
         $this->calculateUseCase = $calculateUseCase;
         $this->calculateInventory = $calculateInventory;
@@ -60,6 +78,9 @@ class SyncAjaxHandler
         $this->syncInventoryUseCase = $syncInventoryUseCase;
         $this->calculateOrder = $calculateOrder;
         $this->syncOrderUseCase = $syncOrderUseCase;
+        $this->calculateAccounting = $calculateAccounting;
+        $this->syncAccountingUseCase = $syncAccountingUseCase;
+        $this->dataSource = $dataSource;
     }
 
     /**
@@ -76,7 +97,7 @@ class SyncAjaxHandler
      */
     public function handleManualSync(): void
     {
-        error_log("Handling manual 123sync AJAX request");
+        error_log("Handling manual sync AJAX request");
         check_ajax_referer('tgs_sync_roll_up_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
@@ -85,47 +106,109 @@ class SyncAjaxHandler
 
         $blogId = get_current_blog_id();
         $date = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : current_time('Y-m-d');
-        $syncType = isset($_POST['sync_type']) ? sanitize_text_field($_POST['sync_type']) : 'all';
 
         try {
             // Fire sync started action
             do_action('tgs_sync_started', $blogId, $date);
 
-            // 1. Calculate product roll-up
-            $type = ($syncType === 'all') ? null : intval($syncType);
-            $savedIds = $this->calculateUseCase->execute($blogId, $date, $type);
+            // BƯỚC 1: Lấy TẤT CẢ ledgers trong ngày với is_croned = 0 và local_ledger_status = 4 (CHỈ MỘT LẦN)
+            $allLedgers = $this->dataSource->getLedgers($date, [], false);
 
-            // 2. Calculate inventory roll-up
-            $inventoryCount = $this->calculateInventory->execute($blogId, $date);
+            if (empty($allLedgers)) {
+                wp_send_json_success([
+                    'message' => __('No unprocessed ledgers found for this date.', 'tgs-sync-roll-up'),
+                    'result' => [
+                        'blog_id' => $blogId,
+                        'date' => $date,
+                        'ledgers_processed' => 0,
+                    ],
+                ]);
+                return;
+            }
 
-            // 3. Calculate order roll-up
-            $orderResult = $this->calculateOrder->execute($blogId, $date);
+            error_log("Manual sync: Found " . count($allLedgers) . " unprocessed ledgers for date {$date}");
 
-            // 4. Sync product roll-up to parent
+            // BƯỚC 2: Phân loại ledgers theo type
+            $ledgersByType = $this->groupLedgersByType($allLedgers);
+
+            // BƯỚC 3: Tính toán roll-up cho từng loại
+            $allLedgerIds = array_column($allLedgers, 'local_ledger_id');
+            $productCount = 0;
+            $inventoryCount = 0;
+            $orderCount = 0;
+            $accountingCount = 0;
+
+            // 3.1. Calculate product roll-up (type 10, 11)
+            if (!empty($ledgersByType[TGS_LEDGER_TYPE_SALES]) || !empty($ledgersByType[11])) {
+                $productLedgers = array_merge(
+                    $ledgersByType[TGS_LEDGER_TYPE_SALES] ?? [],
+                    $ledgersByType[11] ?? []
+                );
+                $productResult = $this->calculateUseCase->executeWithLedgers($blogId, $date, $productLedgers);
+                $productCount = count($productResult['saved_ids'] ?? []);
+            }
+
+            // 3.2. Calculate inventory (type 1, 2, 6)
+            if (!empty($ledgersByType[TGS_LEDGER_TYPE_IMPORT]) ||
+                !empty($ledgersByType[TGS_LEDGER_TYPE_EXPORT]) ||
+                !empty($ledgersByType[TGS_LEDGER_TYPE_DAMAGE])) {
+                $inventoryLedgers = array_merge(
+                    $ledgersByType[TGS_LEDGER_TYPE_IMPORT] ?? [],
+                    $ledgersByType[TGS_LEDGER_TYPE_EXPORT] ?? [],
+                    $ledgersByType[TGS_LEDGER_TYPE_DAMAGE] ?? []
+                );
+                $inventoryResult = $this->calculateInventory->executeWithLedgers($blogId, $date, $inventoryLedgers);
+                $inventoryCount = $inventoryResult['saved_count'] ?? 0;
+            }
+
+            // 3.3. Calculate orders (type 10)
+            if (!empty($ledgersByType[TGS_LEDGER_TYPE_SALES])) {
+                $orderResult = $this->calculateOrder->executeWithLedgers($blogId, $date, $ledgersByType[TGS_LEDGER_TYPE_SALES]);
+                $orderCount = $orderResult['daily'] ?? 0;
+            }
+
+            // 3.4. Calculate accounting (type 7, 8)
+            if (!empty($ledgersByType[TGS_LEDGER_TYPE_RECEIPT]) || !empty($ledgersByType[TGS_LEDGER_TYPE_PAYMENT])) {
+                $accountingLedgers = array_merge(
+                    $ledgersByType[TGS_LEDGER_TYPE_RECEIPT] ?? [],
+                    $ledgersByType[TGS_LEDGER_TYPE_PAYMENT] ?? []
+                );
+                $accountingResult = $this->calculateAccounting->executeWithLedgers($blogId, $date, $accountingLedgers);
+                $accountingCount = $accountingResult['saved_count'] ?? 0;
+            }
+
+            // BƯỚC 4: Đánh dấu TẤT CẢ ledgers đã xử lý
+            if (!empty($allLedgerIds)) {
+                error_log("Manual sync: About to mark " . count($allLedgerIds) . " ledgers as processed");
+                $marked = $this->dataSource->markLedgersAsProcessed($allLedgerIds);
+                error_log("Manual sync: Mark result = " . ($marked ? 'success' : 'failed'));
+            }
+
+            // BƯỚC 5: Sync to parent
             $syncResult = $this->syncUseCase->execute($blogId, $date);
-
-            // 5. Sync inventory to parent
             $syncInventoryResult = $this->syncInventoryUseCase->syncByDate($blogId, $date);
-
-            // 6. Sync orders to parent
             $syncOrderResult = $this->syncOrderUseCase->syncByDate($blogId, $date);
+            $syncAccountingResult = $this->syncAccountingUseCase->syncByDate($blogId, $date);
 
             $result = [
                 'blog_id' => $blogId,
                 'date' => $date,
-                'product_saved_count' => count($savedIds),
+                'ledgers_processed' => count($allLedgerIds),
+                'product_saved_count' => $productCount,
                 'inventory_saved_count' => $inventoryCount,
-                'order_count' => $orderResult['daily'],
+                'order_count' => $orderCount,
+                'accounting_count' => $accountingCount,
                 'sync_product_result' => $syncResult,
                 'sync_inventory_result' => $syncInventoryResult,
                 'sync_order_result' => $syncOrderResult,
+                'sync_accounting_result' => $syncAccountingResult,
             ];
 
             // Fire completed action
-            do_action('tgs_sync_completed', $result, ['type' => $syncType]);
+            do_action('tgs_sync_completed', $result);
 
             wp_send_json_success([
-                'message' => __('Sync completed successfully! Products, inventory, and orders synced.', 'tgs-sync-roll-up'),
+                'message' => __('Sync completed successfully! Products, inventory, orders and accounting synced.', 'tgs-sync-roll-up'),
                 'result' => $result,
             ]);
 
@@ -137,6 +220,25 @@ class SyncAjaxHandler
                 'message' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Group ledgers by type
+     *
+     * @param array $ledgers All ledgers
+     * @return array Ledgers grouped by type
+     */
+    private function groupLedgersByType(array $ledgers): array
+    {
+        $grouped = [];
+        foreach ($ledgers as $ledger) {
+            $type = intval($ledger['local_ledger_type']);
+            if (!isset($grouped[$type])) {
+                $grouped[$type] = [];
+            }
+            $grouped[$type][] = $ledger;
+        }
+        return $grouped;
     }
 
     /**
@@ -171,20 +273,62 @@ class SyncAjaxHandler
                 $results['total']++;
 
                 try {
-                    // 1. Calculate product roll-up
-                    $this->calculateUseCase->execute($blogId, $date, null);
+                    // BƯỚC 1: Lấy TẤT CẢ ledgers trong ngày (CHỈ MỘT LẦN)
+                    // Không quan tâm is_croned vì rebuild có thể xử lý lại
+                    $allLedgers = $this->dataSource->getLedgers($date, [], false);
 
-                    // 2. Calculate inventory roll-up
-                    $this->calculateInventory->execute($blogId, $date);
+                    if (!empty($allLedgers)) {
+                        // BƯỚC 2: Group by type
+                        $ledgersByType = $this->groupLedgersByType($allLedgers);
 
-                    // 3. Calculate order roll-up
-                    $this->calculateOrder->execute($blogId, $date);
+                        // BƯỚC 3: Calculate roll-ups với pre-fetched ledgers
+                        $allLedgerIds = array_column($allLedgers, 'local_ledger_id');
 
-                    // 4. Sync to parent if requested
+                        // 3.1. Product roll-up (types 10 và 11)
+                        if (!empty($ledgersByType[TGS_LEDGER_TYPE_SALES]) || !empty($ledgersByType[11])) {
+                            $productLedgers = array_merge(
+                                $ledgersByType[TGS_LEDGER_TYPE_SALES] ?? [],
+                                $ledgersByType[11] ?? []
+                            );
+                            $this->calculateUseCase->executeWithLedgers($blogId, $date, $productLedgers);
+                        }
+
+                        // 3.2. Inventory roll-up (types 1, 2, 6)
+                        if (!empty($ledgersByType[TGS_LEDGER_TYPE_IMPORT]) || !empty($ledgersByType[TGS_LEDGER_TYPE_EXPORT]) || !empty($ledgersByType[TGS_LEDGER_TYPE_DAMAGE])) {
+                            $inventoryLedgers = array_merge(
+                                $ledgersByType[TGS_LEDGER_TYPE_IMPORT] ?? [],
+                                $ledgersByType[TGS_LEDGER_TYPE_EXPORT] ?? [],
+                                $ledgersByType[TGS_LEDGER_TYPE_DAMAGE] ?? []
+                            );
+                            $this->calculateInventory->executeWithLedgers($blogId, $date, $inventoryLedgers);
+                        }
+
+                        // 3.3. Order roll-up (type 10)
+                        if (!empty($ledgersByType[TGS_LEDGER_TYPE_SALES])) {
+                            $this->calculateOrder->executeWithLedgers($blogId, $date, $ledgersByType[TGS_LEDGER_TYPE_SALES]);
+                        }
+
+                        // 3.4. Accounting roll-up (types 7 và 8)
+                        if (!empty($ledgersByType[TGS_LEDGER_TYPE_RECEIPT]) || !empty($ledgersByType[TGS_LEDGER_TYPE_PAYMENT])) {
+                            $accountingLedgers = array_merge(
+                                $ledgersByType[TGS_LEDGER_TYPE_RECEIPT] ?? [],
+                                $ledgersByType[TGS_LEDGER_TYPE_PAYMENT] ?? []
+                            );
+                            $this->calculateAccounting->executeWithLedgers($blogId, $date, $accountingLedgers);
+                        }
+
+                        // BƯỚC 4: Mark ledgers as processed
+                        if (!empty($allLedgerIds)) {
+                            $this->dataSource->markLedgersAsProcessed($allLedgerIds);
+                        }
+                    }
+
+                    // BƯỚC 5: Sync to parent if requested
                     if ($syncToParents) {
                         $this->syncUseCase->execute($blogId, $date);
                         $this->syncInventoryUseCase->syncByDate($blogId, $date);
                         $this->syncOrderUseCase->syncByDate($blogId, $date);
+                        $this->syncAccountingUseCase->syncByDate($blogId, $date);
                     }
 
                     $results['success']++;
@@ -198,7 +342,7 @@ class SyncAjaxHandler
 
             wp_send_json_success([
                 'message' => sprintf(
-                    __('Rebuild completed! %d/%d days processed (products, inventory & orders).', 'tgs-sync-roll-up'),
+                    __('Rebuild completed! %d/%d days processed (products, inventory, orders & accounting).', 'tgs-sync-roll-up'),
                     $results['success'],
                     $results['total']
                 ),

@@ -46,7 +46,7 @@ class CalculateDailyProductRollup
     }
 
     /**
-     * Execute calculation
+     * Execute calculation (query ledgers from database)
      *
      * @param int $blogId Blog ID
      * @param string $date Ngày (Y-m-d)
@@ -61,102 +61,114 @@ class CalculateDailyProductRollup
             }
 
             $types = $this->getTypesToProcess($syncType);
-
             $ledgers = $this->dataSource->getLedgers($date, $types, true);
 
             if (empty($ledgers)) {
                 return ['saved_ids' => [], 'ledger_ids' => []];
             }
 
-            $ledger_ids = array_column($ledgers, 'local_ledger_id');
+            return $this->processLedgers($blogId, $date, $ledgers);
+        });
+    }
 
-            // Truyền toàn bộ ledgers thay vì chỉ ledger_ids để lấy item IDs từ JSON
-            $items = $this->dataSource->getLedgerItems($ledgers);
-            error_log("12313");
-            error_log(json_encode($items));
-            $items_by_ledger = [];
-            foreach ($items as $item) {
-                $ledger_id = $item['local_ledger_id'];
-                if (!isset($items_by_ledger[$ledger_id])) {
-                    $items_by_ledger[$ledger_id] = [];
-                }
-                $items_by_ledger[$ledger_id][] = $item;
+    /**
+     * Execute calculation with pre-fetched ledgers
+     *
+     * @param int $blogId Blog ID
+     * @param string $date Ngày (Y-m-d)
+     * @param array $ledgers Pre-fetched ledgers
+     * @return array ['saved_ids' => array]
+     */
+    public function executeWithLedgers(int $blogId, string $date, array $ledgers): array
+    {
+        return $this->blogContext->executeInBlog($blogId, function() use ($blogId, $date, $ledgers) {
+            if (empty($ledgers)) {
+                return ['saved_ids' => []];
+            }
+            return $this->processLedgers($blogId, $date, $ledgers);
+        });
+    }
+
+    /**
+     * Process ledgers and save roll-up data
+     *
+     * @param int $blogId Blog ID
+     * @param string $date Date
+     * @param array $ledgers Ledgers to process
+     * @return array Result
+     */
+    private function processLedgers(int $blogId, string $date, array $ledgers): array
+    {
+        $ledger_ids = array_column($ledgers, 'local_ledger_id');
+
+        // Truyền toàn bộ ledgers thay vì chỉ ledger_ids để lấy item IDs từ JSON
+        $items = $this->dataSource->getLedgerItems($ledgers);
+
+        $roll_up_data = [];
+
+        // Lặp trực tiếp qua từng item, không cần map qua ledgers
+        // vì items thuộc về child ledgers, không phải parent ledgers
+        foreach ($items as $item) {
+            $product_id = $item['local_product_name_id'];
+            // Type cố định là 10 (SALES) cho product roll-up
+            $ledger_type = TGS_LEDGER_TYPE_SALES;
+            $key = $product_id . '_' . $ledger_type;
+
+            if (!isset($roll_up_data[$key])) {
+                $roll_up_data[$key] = [
+                    'blog_id' => $blogId,
+                    'roll_up_date' => $date,
+                    'local_product_name_id' => $product_id,
+                    'global_product_name_id' => $item['global_product_name_id'] ?? null,
+                    'type' => $ledger_type,
+                    'amount_after_tax' => 0,
+                    'tax' => 0,
+                    'quantity' => 0,
+                    'lot_ids' => [],
+                ];
             }
 
-            $roll_up_data = [];
+            // Tính toán từ các trường thực tế trong local_ledger_item
+            $quantity = floatval($item['quantity'] ?? 0);
+            $price = floatval($item['price'] ?? 0);
+            $tax = floatval($item['local_ledger_item_tax_amount'] ?? 0);
 
-            foreach ($ledgers as $ledger) {
-                $ledger_id = $ledger['local_ledger_id'];
-                $ledger_type = intval($ledger['local_ledger_type']);
+            // Công thức theo yêu cầu:
+            // amount_after_tax += price * quantity - local_ledger_item_tax_amount
+            // tax += local_ledger_item_tax_amount
+            // quantity += quantity
+            $amount_after_tax = ($price * $quantity) - $tax;
 
-                if (!isset($items_by_ledger[$ledger_id])) {
-                    continue;
-                }
+            $roll_up_data[$key]['amount_after_tax'] += $amount_after_tax;
+            $roll_up_data[$key]['tax'] += $tax;
+            $roll_up_data[$key]['quantity'] += $quantity;
 
-                
-                foreach ($items_by_ledger[$ledger_id] as $item) {
-                    $product_id = $item['local_product_name_id'];
-                    $key = $product_id . '_' . $ledger_type;
-
-                    if (!isset($roll_up_data[$key])) {
-                        $roll_up_data[$key] = [
-                            'blog_id' => $blogId,
-                            'roll_up_date' => $date,
-                            'local_product_name_id' => $product_id,
-                            'global_product_name_id' => $item['global_product_name_id'] ?? null,
-                            'type' => $ledger_type,
-                            'amount_after_tax' => 0,
-                            'tax' => 0,
-                            'quantity' => 0,
-                            'lot_ids' => [],
-                        ];
-                    }
-
-                    // Tính toán từ các trường thực tế trong local_ledger_item
-                    $quantity = floatval($item['quantity'] ?? 0);
-                    $price = floatval($item['price'] ?? 0);
-                    $tax = floatval($item['local_ledger_item_tax_amount'] ?? 0);
-
-                    // Công thức theo yêu cầu:
-                    // amount_after_tax += price * quantity - local_ledger_item_tax_amount
-                    // tax += local_ledger_item_tax_amount
-                    // quantity += quantity
-                    $amount_after_tax = ($price * $quantity) - $tax;
-
-                    $roll_up_data[$key]['amount_after_tax'] += $amount_after_tax;
-                    $roll_up_data[$key]['tax'] += $tax;
-                    $roll_up_data[$key]['quantity'] += $quantity;
-
-                    if (!empty($item['list_product_lots'])) {
-                        $lots = json_decode($item['list_product_lots'], true);
-                        if (is_array($lots)) {
-                            foreach ($lots as $lot) {
-                                if (!empty($lot['id'])) {
-                                    $roll_up_data[$key]['lot_ids'][] = intval($lot['id']);
-                                }
-                            }
+            if (!empty($item['list_product_lots'])) {
+                $lots = json_decode($item['list_product_lots'], true);
+                if (is_array($lots)) {
+                    foreach ($lots as $lot) {
+                        if (!empty($lot['id'])) {
+                            $roll_up_data[$key]['lot_ids'][] = intval($lot['id']);
                         }
                     }
                 }
             }
+        }
 
-            error_log(json_encode($roll_up_data));
-            $saved_ids = [];
-            foreach ($roll_up_data as $data) {
-                $data['lot_ids'] = array_unique($data['lot_ids']);
+        $saved_ids = [];
+        foreach ($roll_up_data as $data) {
+            $data['lot_ids'] = array_unique($data['lot_ids']);
 
-                $roll_up_id = $this->rollUpRepo->save($data, false);
-                if ($roll_up_id) {
-                    $saved_ids[] = $roll_up_id;
-                }
+            $roll_up_id = $this->rollUpRepo->save($data, false);
+            if ($roll_up_id) {
+                $saved_ids[] = $roll_up_id;
             }
+        }
 
-            // Không đánh cờ is_croned ở đây nữa, trả về ledger_ids để CronService xử lý
-            return [
-                'saved_ids' => $saved_ids,
-                'ledger_ids' => $ledger_ids,
-            ];
-        });
+        return [
+            'saved_ids' => $saved_ids,
+            'ledger_ids' => $ledger_ids,
+        ];
     }
 
     /**

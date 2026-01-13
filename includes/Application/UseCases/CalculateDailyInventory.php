@@ -40,7 +40,7 @@ class CalculateDailyInventory
     }
 
     /**
-     * Execute inventory calculation
+     * Execute inventory calculation (query ledgers from database)
      *
      * @param int $blogId Blog ID
      * @param string $date Ngày (Y-m-d)
@@ -50,27 +50,6 @@ class CalculateDailyInventory
     {
         error_log("Calculating daily inventory for blog ID {$blogId} on date {$date}");
         return $this->blogContext->executeInBlog($blogId, function() use ($blogId, $date) {
-            // Logic:
-            // 1. Duplicate tồn kho từ ngày hôm trước sang ngày hôm nay
-            // 2. Lấy ledgers từ local_ledger với type 1 (nhập), 2 (xuất), 6 (hủy)
-            // 3. Lấy items từ local_ledger_item
-            // 4. Tính inventory theo local_product_name_id:
-            //    - Type 1: inventory_qty += quantity, inventory_value += (quantity * price + tax_amount)
-            //    - Type 2,6: inventory_qty -= quantity, inventory_value -= (quantity * price + tax_amount)
-            // 5. Lưu daily record và cộng dồn với tồn kho của ngày hôm trước
-
-            // Parse date
-            $dateParts = explode('-', $date);
-            $year = intval($dateParts[0]);
-            $month = intval($dateParts[1]);
-            $day = intval($dateParts[2]);
-
-            $inventoryTable = $this->wpdb->prefix . 'inventory_roll_up';
-
-            // BƯỚC 1: Duplicate các record của ngày hôm trước và thay bằng ngày hôm nay
-            // Điều này đảm bảo hàng tồn được cộng dồn từ ngày hôm trước
-            $this->duplicateYesterdayInventory($blogId, $date);
-
             // Lấy ledgers với type 1, 2, 6
             $types = [
                 TGS_LEDGER_TYPE_IMPORT,  // 1 - Nhập hàng
@@ -85,87 +64,129 @@ class CalculateDailyInventory
                 return ['saved_count' => 0, 'ledger_ids' => []];
             }
 
-            // Lấy ledger IDs
-            $ledgerIds = array_column($ledgers, 'local_ledger_id');
+            return $this->processLedgers($blogId, $date, $ledgers);
+        });
+    }
 
-            // Lấy items từ local_ledger_item (truyền toàn bộ ledgers để parse JSON local_ledger_item_id)
-            $items = $this->dataSource->getLedgerItems($ledgers);
+    /**
+     * Execute inventory calculation with pre-fetched ledgers
+     *
+     * @param int $blogId Blog ID
+     * @param string $date Ngày (Y-m-d)
+     * @param array $ledgers Pre-fetched ledgers
+     * @return array ['saved_count' => int]
+     */
+    public function executeWithLedgers(int $blogId, string $date, array $ledgers): array
+    {
+        return $this->blogContext->executeInBlog($blogId, function() use ($blogId, $date, $ledgers) {
+            if (empty($ledgers)) {
+                return ['saved_count' => 0];
+            }
+            return $this->processLedgers($blogId, $date, $ledgers);
+        });
+    }
 
-            if (empty($items)) {
-                error_log("No items found for ledgers");
-                return ['saved_count' => 0, 'ledger_ids' => $ledgerIds];
+    /**
+     * Process ledgers and calculate inventory
+     *
+     * @param int $blogId Blog ID
+     * @param string $date Date
+     * @param array $ledgers Ledgers to process
+     * @return array Result
+     */
+    private function processLedgers(int $blogId, string $date, array $ledgers): array
+    {
+        // Parse date
+        $dateParts = explode('-', $date);
+        $year = intval($dateParts[0]);
+        $month = intval($dateParts[1]);
+        $day = intval($dateParts[2]);
+
+        $inventoryTable = $this->wpdb->prefix . 'inventory_roll_up';
+
+        // BƯỚC 1: Duplicate các record của ngày hôm trước và thay bằng ngày hôm nay
+        // Điều này đảm bảo hàng tồn được cộng dồn từ ngày hôm trước
+        $this->duplicateYesterdayInventory($blogId, $date);
+
+        // Lấy ledger IDs
+        $ledgerIds = array_column($ledgers, 'local_ledger_id');
+
+        // Lấy items từ local_ledger_item (truyền toàn bộ ledgers để parse JSON local_ledger_item_id)
+        $items = $this->dataSource->getLedgerItems($ledgers);
+
+        if (empty($items)) {
+            error_log("No items found for ledgers");
+            return ['saved_count' => 0, 'ledger_ids' => $ledgerIds];
+        }
+
+        // Group items by ledger_id để biết type
+        $itemsByLedger = [];
+        foreach ($items as $item) {
+            $ledgerId = $item['local_ledger_id'];
+            if (!isset($itemsByLedger[$ledgerId])) {
+                $itemsByLedger[$ledgerId] = [];
+            }
+            $itemsByLedger[$ledgerId][] = $item;
+        }
+
+        // Tính inventory theo product
+        $dailyInventory = [];
+
+        foreach ($ledgers as $ledger) {
+            $ledgerId = $ledger['local_ledger_id'];
+            $ledgerType = intval($ledger['local_ledger_type']);
+
+            if (!isset($itemsByLedger[$ledgerId])) {
+                continue;
             }
 
-            // Group items by ledger_id để biết type
-            $itemsByLedger = [];
-            foreach ($items as $item) {
-                $ledgerId = $item['local_ledger_id'];
-                if (!isset($itemsByLedger[$ledgerId])) {
-                    $itemsByLedger[$ledgerId] = [];
-                }
-                $itemsByLedger[$ledgerId][] = $item;
-            }
+            foreach ($itemsByLedger[$ledgerId] as $item) {
+                $productId = $item['local_product_name_id'];
+                $quantity = floatval($item['quantity'] ?? 0);
+                $price = floatval($item['price'] ?? 0);
+                $taxAmount = floatval($item['local_ledger_item_tax_amount'] ?? 0);
 
-            error_log("Calculating inventory from ledgers and items");
-            error_log(json_encode($itemsByLedger));
-            // Tính inventory theo product
-            $dailyInventory = [];
+                // Tính value = quantity * price + tax
+                $value = ($quantity * $price) + $taxAmount;
 
-            foreach ($ledgers as $ledger) {
-                $ledgerId = $ledger['local_ledger_id'];
-                $ledgerType = intval($ledger['local_ledger_type']);
-
-                if (!isset($itemsByLedger[$ledgerId])) {
-                    continue;
+                if (!isset($dailyInventory[$productId])) {
+                    $dailyInventory[$productId] = [
+                        'global_product_name_id' => $item['global_product_name_id'] ?? null,
+                        'qty' => 0,
+                        'value' => 0,
+                    ];
                 }
 
-                foreach ($itemsByLedger[$ledgerId] as $item) {
-                    $productId = $item['local_product_name_id'];
-                    $quantity = floatval($item['quantity'] ?? 0);
-                    $price = floatval($item['price'] ?? 0);
-                    $taxAmount = floatval($item['local_ledger_item_tax_amount'] ?? 0);
-
-                    // Tính value = quantity * price + tax
-                    $value = ($quantity * $price) + $taxAmount;
-
-                    if (!isset($dailyInventory[$productId])) {
-                        $dailyInventory[$productId] = [
-                            'global_product_name_id' => $item['global_product_name_id'] ?? null,
-                            'qty' => 0,
-                            'value' => 0,
-                        ];
-                    }
-
-                    // Type 1 = Import (+)
-                    if ($ledgerType === TGS_LEDGER_TYPE_IMPORT) {
-                        $dailyInventory[$productId]['qty'] += $quantity;
-                        $dailyInventory[$productId]['value'] += $value;
-                    }
-                    // Type 2 = Export (-) hoặc Type 6 = Damage (-)
-                    elseif ($ledgerType === TGS_LEDGER_TYPE_EXPORT || $ledgerType === TGS_LEDGER_TYPE_DAMAGE) {
-                        $dailyInventory[$productId]['qty'] -= $quantity;
-                        $dailyInventory[$productId]['value'] -= $value;
-                    }
+                // Type 1 = Import (+)
+                if ($ledgerType === TGS_LEDGER_TYPE_IMPORT) {
+                    $dailyInventory[$productId]['qty'] += $quantity;
+                    $dailyInventory[$productId]['value'] += $value;
+                }
+                // Type 2 = Export (-) hoặc Type 6 = Damage (-)
+                elseif ($ledgerType === TGS_LEDGER_TYPE_EXPORT || $ledgerType === TGS_LEDGER_TYPE_DAMAGE) {
+                    $dailyInventory[$productId]['qty'] -= $quantity;
+                    $dailyInventory[$productId]['value'] -= $value;
                 }
             }
+        }
 
-            // Save daily inventory (sử dụng INSERT ... ON DUPLICATE KEY UPDATE)
-            $savedCount = 0;
-            foreach ($dailyInventory as $productId => $data) {
-                $this->wpdb->query($this->wpdb->prepare(
-                    "INSERT INTO {$inventoryTable}
-                    (blog_id, local_product_name_id, global_product_name_id,
-                     roll_up_date, roll_up_day, roll_up_month, roll_up_year,
-                     inventory_qty, inventory_value, created_at, updated_at)
-                    VALUES (%d, %d, %d, %s, %d, %d, %d, %f, %f, %s, %s)
-                    ON DUPLICATE KEY UPDATE
-                        inventory_qty = inventory_qty + VALUES(inventory_qty),
-                        inventory_value = inventory_value + VALUES(inventory_value),
-                        updated_at = VALUES(updated_at)",
-                    $blogId,
-                    $productId,
-                    $data['global_product_name_id'],
-                    $date,
+        // Save daily inventory (sử dụng INSERT ... ON DUPLICATE KEY UPDATE)
+        $savedCount = 0;
+        foreach ($dailyInventory as $productId => $data) {
+            $this->wpdb->query($this->wpdb->prepare(
+                "INSERT INTO {$inventoryTable}
+                (blog_id, local_product_name_id, global_product_name_id,
+                 roll_up_date, roll_up_day, roll_up_month, roll_up_year,
+                 inventory_qty, inventory_value, created_at, updated_at)
+                VALUES (%d, %d, %d, %s, %d, %d, %d, %f, %f, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    inventory_qty = inventory_qty + VALUES(inventory_qty),
+                    inventory_value = inventory_value + VALUES(inventory_value),
+                    updated_at = VALUES(updated_at)",
+                $blogId,
+                $productId,
+                $data['global_product_name_id'],
+                $date,
                     $day,
                     $month,
                     $year,
@@ -175,15 +196,13 @@ class CalculateDailyInventory
                     current_time('mysql')
                 ));
 
-                $savedCount++;
-            }
+            $savedCount++;
+        }
 
-            // Không đánh cờ is_croned ở đây, trả về ledger_ids để CronService xử lý
-            return [
-                'saved_count' => $savedCount,
-                'ledger_ids' => $ledgerIds,
-            ];
-        });
+        return [
+            'saved_count' => $savedCount,
+            'ledger_ids' => $ledgerIds,
+        ];
     }
 
     /**

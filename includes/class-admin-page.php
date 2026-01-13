@@ -924,22 +924,24 @@ class TGS_Admin_Page
 
         $hierarchy = array();
 
-        // Đọc từ bảng config chung wp_sync_roll_up_config
-        // LẤY:
-        // 1. Shops có approval_status = 'approved' (đã được approve bởi shop cha)
-        // 2. Shops không có parent_blog_id (root shops)
+        // Build hierarchy using all blogs and left join config table so that
+        // blogs without a config row are included as root nodes.
         $config_table = TGSR_TABLE_SYNC_ROLL_UP_CONFIG;
-        $configs = $wpdb->get_results(
-            "SELECT blog_id, parent_blog_id
-             FROM {$config_table}
-             WHERE approval_status = 'approved'
-             OR parent_blog_id IS NULL
-             OR parent_blog_id = ''"
-        );
+        $blogs_table = $wpdb->blogs;
 
-        foreach ($configs as $config) {
-            $blog_id = intval($config->blog_id);
-            $parent_id = !empty($config->parent_blog_id) ? intval($config->parent_blog_id) : null;
+        // Use NULLIF to convert empty-string parent_blog_id to NULL
+        $sql = "SELECT b.blog_id, NULLIF(c.parent_blog_id, '') AS parent_blog_id
+                FROM {$blogs_table} b
+                LEFT JOIN {$config_table} c
+                  ON c.blog_id = b.blog_id AND c.approval_status = 'approved'";
+
+        $rows = $wpdb->get_results($sql);
+
+        foreach ($rows as $row) {
+            $blog_id = intval($row->blog_id);
+            $parent_id = isset($row->parent_blog_id) && $row->parent_blog_id !== null && $row->parent_blog_id !== ''
+                ? intval($row->parent_blog_id)
+                : null;
             $hierarchy[$blog_id] = $parent_id;
         }
 

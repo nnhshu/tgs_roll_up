@@ -137,49 +137,68 @@ class CronService
         $date = current_time('Y-m-d');
 
         try {
-            // Thu thập tất cả ledger_ids từ 3 loại roll-up
-            $allLedgerIds = [];
+            // BƯỚC 1: Lấy TẤT CẢ ledgers trong ngày với is_croned = 0 và local_ledger_status = 4 (CHỈ MỘT LẦN)
+            $allLedgers = $this->dataSource->getLedgers($date, [], false);
 
-            // 1. Calculate product roll-up
-            $productResult = $this->calculateRollUp->execute($blogId, $date);
-            if (!empty($productResult['ledger_ids'])) {
-                $allLedgerIds = array_merge($allLedgerIds, $productResult['ledger_ids']);
+            if (empty($allLedgers)) {
+                error_log("CronService: No unprocessed ledgers found for date {$date}");
+                return;
             }
 
-            // 2. Calculate inventory
-            $inventoryResult = $this->calculateInventory->execute($blogId, $date);
-            if (!empty($inventoryResult['ledger_ids'])) {
-                $allLedgerIds = array_merge($allLedgerIds, $inventoryResult['ledger_ids']);
+            error_log("CronService: Found " . count($allLedgers) . " unprocessed ledgers for date {$date}");
+
+            // BƯỚC 2: Phân loại ledgers theo type
+            $ledgersByType = $this->groupLedgersByType($allLedgers);
+
+            // BƯỚC 3: Tính toán roll-up cho từng loại
+            $allLedgerIds = array_column($allLedgers, 'local_ledger_id');
+
+            // 3.1. Calculate product roll-up (type 10, 11)
+            if (!empty($ledgersByType[TGS_LEDGER_TYPE_SALES]) || !empty($ledgersByType[11])) {
+                $productLedgers = array_merge(
+                    $ledgersByType[TGS_LEDGER_TYPE_SALES] ?? [],
+                    $ledgersByType[11] ?? []
+                );
+                $this->calculateRollUp->executeWithLedgers($blogId, $date, $productLedgers);
             }
 
-            // 3. Calculate orders
-            $orderResult = $this->calculateOrder->execute($blogId, $date);
-            if (!empty($orderResult['ledger_ids'])) {
-                $allLedgerIds = array_merge($allLedgerIds, $orderResult['ledger_ids']);
+            // 3.2. Calculate inventory (type 1, 2, 6)
+            if (!empty($ledgersByType[TGS_LEDGER_TYPE_IMPORT]) ||
+                !empty($ledgersByType[TGS_LEDGER_TYPE_EXPORT]) ||
+                !empty($ledgersByType[TGS_LEDGER_TYPE_DAMAGE])) {
+                $inventoryLedgers = array_merge(
+                    $ledgersByType[TGS_LEDGER_TYPE_IMPORT] ?? [],
+                    $ledgersByType[TGS_LEDGER_TYPE_EXPORT] ?? [],
+                    $ledgersByType[TGS_LEDGER_TYPE_DAMAGE] ?? []
+                );
+                $this->calculateInventory->executeWithLedgers($blogId, $date, $inventoryLedgers);
             }
 
-            // 4. Calculate accounting (thu chi)
-            $accountingResult = $this->calculateAccounting->execute($blogId, $date);
-            if (!empty($accountingResult['ledger_ids'])) {
-                $allLedgerIds = array_merge($allLedgerIds, $accountingResult['ledger_ids']);
+            // 3.3. Calculate orders (type 10)
+            if (!empty($ledgersByType[TGS_LEDGER_TYPE_SALES])) {
+                $this->calculateOrder->executeWithLedgers($blogId, $date, $ledgersByType[TGS_LEDGER_TYPE_SALES]);
             }
 
-            // 5. Loại bỏ duplicate ledger_ids và đánh cờ is_croned = 1 SAU KHI TẤT CẢ ROLL-UP XONG
+            // 3.4. Calculate accounting (type 7, 8)
+            if (!empty($ledgersByType[TGS_LEDGER_TYPE_RECEIPT]) || !empty($ledgersByType[TGS_LEDGER_TYPE_PAYMENT])) {
+                $accountingLedgers = array_merge(
+                    $ledgersByType[TGS_LEDGER_TYPE_RECEIPT] ?? [],
+                    $ledgersByType[TGS_LEDGER_TYPE_PAYMENT] ?? []
+                );
+                $this->calculateAccounting->executeWithLedgers($blogId, $date, $accountingLedgers);
+            }
+
+            // BƯỚC 4: Đánh dấu TẤT CẢ ledgers đã xử lý
             if (!empty($allLedgerIds)) {
-                $allLedgerIds = array_unique($allLedgerIds);
-                $this->dataSource->markLedgersAsProcessed($allLedgerIds);
+                error_log("CronService: About to mark " . count($allLedgerIds) . " ledgers as processed");
+                $marked = $this->dataSource->markLedgersAsProcessed($allLedgerIds);
+                error_log("CronService: Mark result = " . ($marked ? 'success' : 'failed'));
             }
 
-            // 6. Sync product roll-up to parent (if configured)
+            // BƯỚC 5: Sync to parent
             $this->syncToParent->execute($blogId, $date);
-
-            // 7. Sync inventory to parent (if configured)
             $this->syncInventoryToParent->syncByDate($blogId, $date);
-
-            // 8. Sync orders to parent (if configured)
             $this->syncOrderToParent->syncByDate($blogId, $date);
-
-            // 9. Sync accounting to parent (if configured)
             $this->syncAccountingToParent->syncByDate($blogId, $date);
 
             $this->logCron([
@@ -198,6 +217,25 @@ class CronService
                 'message' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Group ledgers by type
+     *
+     * @param array $ledgers All ledgers
+     * @return array Ledgers grouped by type
+     */
+    private function groupLedgersByType(array $ledgers): array
+    {
+        $grouped = [];
+        foreach ($ledgers as $ledger) {
+            $type = intval($ledger['local_ledger_type']);
+            if (!isset($grouped[$type])) {
+                $grouped[$type] = [];
+            }
+            $grouped[$type][] = $ledger;
+        }
+        return $grouped;
     }
 
     /**

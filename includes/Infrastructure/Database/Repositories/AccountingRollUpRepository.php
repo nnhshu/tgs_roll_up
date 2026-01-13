@@ -28,6 +28,28 @@ class AccountingRollUpRepository
     }
 
     /**
+     * Ensure accounting_roll_up table exists
+     * Tự động tạo bảng nếu chưa tồn tại
+     */
+    private function ensureTableExists(): void
+    {
+        $table = $this->wpdb->prefix . 'accounting_roll_up';
+
+        // Check if table exists
+        $table_exists = $this->wpdb->get_var("SHOW TABLES LIKE '{$table}'");
+
+        if (!$table_exists) {
+            error_log("AccountingRollUpRepository: Table {$table} does not exist, creating it now...");
+
+            // Create table using the Database class method
+            $blog_id = get_current_blog_id();
+            TGS_Sync_Roll_Up_Database::create_accounting_roll_up_table($blog_id);
+
+            error_log("AccountingRollUpRepository: Table {$table} created successfully");
+        }
+    }
+
+    /**
      * Save accounting record
      *
      * @param array $data Accounting data
@@ -35,6 +57,7 @@ class AccountingRollUpRepository
      */
     public function save(array $data): int
     {
+        $this->ensureTableExists();
         $table = $this->wpdb->prefix . 'accounting_roll_up';
 
         // Prepare data
@@ -91,6 +114,7 @@ class AccountingRollUpRepository
      */
     public function findByBlogAndDate(int $blogId, string $date): ?array
     {
+        $this->ensureTableExists();
         $table = $this->wpdb->prefix . 'accounting_roll_up';
         $date_parts = explode('-', $date);
         $year = intval($date_parts[0]);
@@ -122,6 +146,7 @@ class AccountingRollUpRepository
      */
     public function findByDateRange(int $blogId, string $fromDate, string $toDate): array
     {
+        $this->ensureTableExists();
         $table = $this->wpdb->prefix . 'accounting_roll_up';
 
         return $this->wpdb->get_results($this->wpdb->prepare(
@@ -145,6 +170,7 @@ class AccountingRollUpRepository
      */
     public function deleteByDateRange(int $blogId, string $fromDate, string $toDate): bool
     {
+        $this->ensureTableExists();
         $table = $this->wpdb->prefix . 'accounting_roll_up';
 
         $result = $this->wpdb->query($this->wpdb->prepare(
@@ -169,6 +195,7 @@ class AccountingRollUpRepository
      */
     public function getTotals(int $blogId, int $year, ?int $month = null): ?array
     {
+        $this->ensureTableExists();
         $table = $this->wpdb->prefix . 'accounting_roll_up';
 
         $query = "SELECT

@@ -115,13 +115,6 @@ if (!defined('ABSPATH')) {
             <div class="tgs-panel">
                 <h2><?php esc_html_e('Thao tác nhanh', 'tgs-sync-roll-up'); ?></h2>
                 <div class="tgs-quick-actions">
-                    <select id="tgs-sync-type-select" class="tgs-sync-type-select" style="height: 32px; margin-right: 8px; vertical-align: middle;">
-                        <option value="all"><?php esc_html_e('Tất cả', 'tgs-sync-roll-up'); ?></option>
-                        <option value="products"><?php esc_html_e('Sản phẩm', 'tgs-sync-roll-up'); ?></option>
-                        <option value="orders"><?php esc_html_e('Đơn hàng', 'tgs-sync-roll-up'); ?></option>
-                        <option value="inventory"><?php esc_html_e('Tồn kho', 'tgs-sync-roll-up'); ?></option>
-                    </select>
-
                     <button type="button" class="button button-primary" id="tgs-manual-sync-btn">
                         <span class="dashicons dashicons-update"></span>
                         <?php esc_html_e('Sync ngay', 'tgs-sync-roll-up'); ?>

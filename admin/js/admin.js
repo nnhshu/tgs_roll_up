@@ -220,15 +220,13 @@
         handleManualSync: function(e) {
             var $button = $(e.target);
             var originalText = $button.text();
-            var syncType = $('#tgs-sync-type-select').val() || 'all';
 
             $button.prop('disabled', true).text(tgsSyncRollUp.i18n.syncing);
 
             $.post(tgsSyncRollUp.ajaxUrl, {
                 action: 'tgs_manual_sync',
                 nonce: tgsSyncRollUp.nonce,
-                date: this.getCurrentDate(),
-                sync_type: syncType
+                date: this.getCurrentDate()
             })
             .done(function(response) {
                 if (response.success) {

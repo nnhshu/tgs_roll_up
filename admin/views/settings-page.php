@@ -28,6 +28,7 @@ if (!defined('ABSPATH')) {
             // Lấy trạng thái approval
             $approval_status = $config->approval_status ?? null;
             $is_pending = ($approval_status === 'pending');
+            $has_parent = (!empty($parent_blog_id) && $approval_status === 'approved');
             ?>
 
             <table class="form-table">
@@ -38,7 +39,7 @@ if (!defined('ABSPATH')) {
                     <td>
                         <?php if (!empty($all_blogs)): ?>
                             <div class="tgs-parent-selection-wrapper">
-                                <select name="parent_blog_id" id="parent_blog_id" class="tgs-select2" <?php disabled($is_pending); ?>>
+                                <select name="parent_blog_id" id="parent_blog_id" class="tgs-select2" <?php disabled($is_pending || $has_parent); ?>>
                                     <option value=""><?php esc_html_e('-- Không có shop cha --', 'tgs-sync-roll-up'); ?></option>
                                     <?php foreach ($all_blogs as $blog): ?>
                                         <?php if ($blog->blog_id != $blog_id): // Không cho chọn chính mình ?>
@@ -61,8 +62,19 @@ if (!defined('ABSPATH')) {
                                             <?php esc_html_e('Hủy Yêu Cầu', 'tgs-sync-roll-up'); ?>
                                         </button>
                                     </div>
+                                <?php elseif ($has_parent): ?>
+                                    <!-- Đã có parent approved: không hiển thị nút yêu cầu, chỉ hiển thị thông tin -->
+                                    <div class="tgs-parent-actions">
+                                        <span id="tgs-save-parent-message" class="tgs-message"></span>
+                                        <span class="spinner" id="tgs-parent-spinner"></span>
+                                        <p class="description"><strong><?php esc_html_e('Shop này đã được cấu hình shop cha.', 'tgs-sync-roll-up'); ?></strong>
+                                            <?php if (!empty($parent_blog_id)): ?>
+                                                &nbsp;<?php echo esc_html(TGS_Admin_Page::get_blog_name($parent_blog_id)); ?> (ID: <?php echo esc_html($parent_blog_id); ?>)
+                                            <?php endif; ?>
+                                        </p>
+                                    </div>
                                 <?php else: ?>
-                                    <!-- Hiển thị nút Yêu Cầu (hoặc Thay Đổi nếu đã có cha) -->
+                                    <!-- Hiển thị nút Yêu Cầu nếu chưa có parent và không đang pending -->
                                     <div class="tgs-parent-actions">
                                         <span id="tgs-save-parent-message" class="tgs-message"></span>
                                         <span class="spinner" id="tgs-parent-spinner"></span>
