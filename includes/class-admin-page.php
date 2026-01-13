@@ -689,7 +689,7 @@ class TGS_Admin_Page
      */
     public function ajax_get_stats_by_date()
     {
-        check_ajax_referer('tgs_sync_nonce', 'nonce');
+        check_ajax_referer('tgs_sync_roll_up_nonce', 'nonce');
 
         $blog_id = get_current_blog_id();
         $from_date = isset($_POST['from_date']) ? sanitize_text_field($_POST['from_date']) : current_time('Y-m-d');
@@ -732,7 +732,7 @@ class TGS_Admin_Page
      */
     public function ajax_get_child_shop_detail()
     {
-        check_ajax_referer('tgs_sync_nonce', 'nonce');
+        check_ajax_referer('tgs_sync_roll_up_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => 'Permission denied'));
