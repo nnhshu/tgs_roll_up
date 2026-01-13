@@ -147,6 +147,19 @@ class ServiceContainer
                 self::make(SyncToParentShop::class)
             );
         });
+
+        self::singleton(ConfigAjaxHandler::class, function() {
+            return new ConfigAjaxHandler(
+                self::make(ConfigRepositoryInterface::class)
+            );
+        });
+
+        self::singleton(DashboardAjaxHandler::class, function() {
+            return new DashboardAjaxHandler(
+                self::make(RollUpRepositoryInterface::class),
+                self::make(ConfigRepositoryInterface::class)
+            );
+        });
     }
 
     /**

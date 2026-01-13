@@ -42,6 +42,7 @@ class CalculateDailyInventory
      */
     public function execute(int $blogId, string $date): int
     {
+        error_log("Calculating daily inventory for blog ID {$blogId} on date {$date}");
         return $this->blogContext->executeInBlog($blogId, function() use ($blogId, $date) {
             // Logic: Inventory(today) = Inventory(yesterday) + Transactions(today)
 

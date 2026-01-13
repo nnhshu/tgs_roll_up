@@ -81,8 +81,8 @@ class TGS_Admin_Page
         add_action('wp_ajax_tgs_approve_parent_request', array($this, 'ajax_approve_parent_request'));
         add_action('wp_ajax_tgs_reject_parent_request', array($this, 'ajax_reject_parent_request'));
         add_action('wp_ajax_tgs_save_sync_settings', array($this, 'ajax_save_settings'));
-        add_action('wp_ajax_tgs_manual_sync', array($this, 'ajax_manual_sync'));
-        add_action('wp_ajax_tgs_rebuild_rollup', array($this, 'ajax_rebuild_rollup'));
+        // add_action('wp_ajax_tgs_manual_sync', array($this, 'ajax_manual_sync'));
+        // add_action('wp_ajax_tgs_rebuild_rollup', array($this, 'ajax_rebuild_rollup'));
         add_action('wp_ajax_tgs_get_sync_status', array($this, 'ajax_get_sync_status'));
         add_action('wp_ajax_tgs_get_dashboard_data', array($this, 'ajax_get_dashboard_data'));
         add_action('wp_ajax_tgs_get_stats_by_date', array($this, 'ajax_get_stats_by_date'));
@@ -597,6 +597,7 @@ class TGS_Admin_Page
     {
         check_ajax_referer('tgs_sync_roll_up_nonce', 'nonce');
 
+        error_log("Handling manual sync AJAX request2213");
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => 'Permission denied'));
         }

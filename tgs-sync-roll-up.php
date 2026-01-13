@@ -127,6 +127,8 @@ class TGS_Sync_Roll_Up
 
         // New Architecture - Presentation
         require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Presentation/Ajax/SyncAjaxHandler.php';
+        require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Presentation/Ajax/ConfigAjaxHandler.php';
+        require_once TGS_SYNC_ROLL_UP_PATH . 'includes/Presentation/Ajax/DashboardAjaxHandler.php';
 
         // Register services BEFORE loading admin page
         ServiceContainer::registerServices();
@@ -243,8 +245,14 @@ class TGS_Sync_Roll_Up
 
             // Register new AJAX handlers
             try {
-                $ajaxHandler = ServiceContainer::make(SyncAjaxHandler::class);
-                $ajaxHandler->registerHooks();
+                $syncHandler = ServiceContainer::make(SyncAjaxHandler::class);
+                $syncHandler->registerHooks();
+
+                $configHandler = ServiceContainer::make(ConfigAjaxHandler::class);
+                $configHandler->registerHooks();
+
+                $dashboardHandler = ServiceContainer::make(DashboardAjaxHandler::class);
+                $dashboardHandler->registerHooks();
             } catch (Exception $e) {
                 error_log('TGS Sync Roll-Up: Failed to initialize AJAX handlers - ' . $e->getMessage());
             }

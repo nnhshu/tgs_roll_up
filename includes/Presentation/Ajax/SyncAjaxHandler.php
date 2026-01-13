@@ -48,6 +48,7 @@ class SyncAjaxHandler
      */
     public function handleManualSync(): void
     {
+        error_log("Handling manual 123sync AJAX request");
         check_ajax_referer('tgs_sync_roll_up_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
