@@ -44,7 +44,7 @@ class CalculateDailyOrder
      *
      * @param int $blogId Blog ID
      * @param string $date Ngày (Y-m-d)
-     * @return array Result with daily and monthly counts
+     * @return array Result with daily, monthly counts and ledger_ids
      */
     public function execute(int $blogId, string $date): array
     {
@@ -67,7 +67,7 @@ class CalculateDailyOrder
 
             if (empty($todayOrders)) {
                 error_log("No orders found for date {$date}");
-                return ['daily' => 0, 'monthly' => 0];
+                return ['daily' => 0, 'monthly' => 0, 'ledger_ids' => []];
             }
 
             // Calculate daily order statistics
@@ -96,17 +96,15 @@ class CalculateDailyOrder
 
             $this->wpdb->replace($orderRollUpTable, $insertData);
 
-            // Mark orders as processed (is_croned = 1)
-            if (!empty($ledgerIds)) {
-                $this->dataSource->markOrdersAsProcessed($ledgerIds);
-            }
+            // Không đánh cờ is_croned ở đây nữa, trả về ledger_ids để CronService xử lý
 
             // Update monthly total (roll_up_day = 0)
             $this->updateMonthlyTotal($blogId, $year, $month);
 
             return [
                 'daily' => $orderCount,
-                'monthly' => $this->getMonthlyCount($blogId, $year, $month)
+                'monthly' => $this->getMonthlyCount($blogId, $year, $month),
+                'ledger_ids' => $ledgerIds,
             ];
         });
     }

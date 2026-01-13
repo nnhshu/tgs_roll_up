@@ -171,7 +171,8 @@ class ServiceContainer
                 self::make(SyncInventoryToParentShop::class),
                 self::make(CalculateDailyOrder::class),
                 self::make(SyncOrderToParentShop::class),
-                self::make(ConfigRepositoryInterface::class)
+                self::make(ConfigRepositoryInterface::class),
+                self::make(DataSourceInterface::class)
             );
         });
 

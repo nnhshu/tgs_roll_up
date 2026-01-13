@@ -88,8 +88,11 @@ class SyncInventoryToParentShop
             return $result;
         }
 
-        // Lấy monthly total inventory của shop con (roll_up_day = 0)
-        $sourceRecords = $this->inventoryRepo->findMonthlyTotal($sourceBlogId, $year, $month);
+        // Lấy TẤT CẢ inventory records của shop con cho tháng này (cả daily và monthly total)
+        $firstDayOfMonth = sprintf('%04d-%02d-01', $year, $month);
+        $lastDayOfMonth = sprintf('%04d-%02d-%02d', $year, $month, cal_days_in_month(CAL_GREGORIAN, $month, $year));
+
+        $sourceRecords = $this->inventoryRepo->findByDateRange($sourceBlogId, $firstDayOfMonth, $lastDayOfMonth);
 
         if (empty($sourceRecords)) {
             $result['message'] = 'No inventory data found for source blog';
@@ -107,7 +110,7 @@ class SyncInventoryToParentShop
                     'local_product_name_id' => $record['local_product_name_id'],
                     'global_product_name_id' => $record['global_product_name_id'],
                     'roll_up_date' => $record['roll_up_date'],
-                    'roll_up_day' => 0,  // Monthly total
+                    'roll_up_day' => $record['roll_up_day'],  // Giữ nguyên roll_up_day (có thể là 0 hoặc ngày cụ thể)
                     'inventory_qty' => $record['inventory_qty'],
                     'inventory_value' => $record['inventory_value'],
                 ];

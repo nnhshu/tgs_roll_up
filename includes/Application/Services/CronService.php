@@ -55,6 +55,11 @@ class CronService
     private $configRepo;
 
     /**
+     * @var DataSourceInterface
+     */
+    private $dataSource;
+
+    /**
      * Constructor
      */
     public function __construct(
@@ -64,7 +69,8 @@ class CronService
         SyncInventoryToParentShop $syncInventoryToParent,
         CalculateDailyOrder $calculateOrder,
         SyncOrderToParentShop $syncOrderToParent,
-        ConfigRepositoryInterface $configRepo
+        ConfigRepositoryInterface $configRepo,
+        DataSourceInterface $dataSource
     ) {
         $this->calculateRollUp = $calculateRollUp;
         $this->calculateInventory = $calculateInventory;
@@ -73,6 +79,7 @@ class CronService
         $this->calculateOrder = $calculateOrder;
         $this->syncOrderToParent = $syncOrderToParent;
         $this->configRepo = $configRepo;
+        $this->dataSource = $dataSource;
     }
 
     /**
@@ -116,22 +123,40 @@ class CronService
         $date = current_time('Y-m-d');
 
         try {
+            // Thu thập tất cả ledger_ids từ 3 loại roll-up
+            $allLedgerIds = [];
+
             // 1. Calculate product roll-up
-            $this->calculateRollUp->execute($blogId, $date);
+            $productResult = $this->calculateRollUp->execute($blogId, $date);
+            if (!empty($productResult['ledger_ids'])) {
+                $allLedgerIds = array_merge($allLedgerIds, $productResult['ledger_ids']);
+            }
 
             // 2. Calculate inventory
-            $this->calculateInventory->execute($blogId, $date);
+            $inventoryResult = $this->calculateInventory->execute($blogId, $date);
+            if (!empty($inventoryResult['ledger_ids'])) {
+                $allLedgerIds = array_merge($allLedgerIds, $inventoryResult['ledger_ids']);
+            }
 
             // 3. Calculate orders
-            $this->calculateOrder->execute($blogId, $date);
+            $orderResult = $this->calculateOrder->execute($blogId, $date);
+            if (!empty($orderResult['ledger_ids'])) {
+                $allLedgerIds = array_merge($allLedgerIds, $orderResult['ledger_ids']);
+            }
 
-            // 4. Sync product roll-up to parent (if configured)
+            // 4. Loại bỏ duplicate ledger_ids và đánh cờ is_croned = 1 SAU KHI TẤT CẢ ROLL-UP XONG
+            if (!empty($allLedgerIds)) {
+                $allLedgerIds = array_unique($allLedgerIds);
+                $this->dataSource->markLedgersAsProcessed($allLedgerIds);
+            }
+
+            // 5. Sync product roll-up to parent (if configured)
             $this->syncToParent->execute($blogId, $date);
 
-            // 5. Sync inventory to parent (if configured)
+            // 6. Sync inventory to parent (if configured)
             $this->syncInventoryToParent->syncByDate($blogId, $date);
 
-            // 6. Sync orders to parent (if configured)
+            // 7. Sync orders to parent (if configured)
             $this->syncOrderToParent->syncByDate($blogId, $date);
 
             $this->logCron([
@@ -139,6 +164,7 @@ class CronService
                 'date' => $date,
                 'status' => 'success',
                 'message' => 'Cron completed successfully',
+                'ledgers_processed' => count($allLedgerIds),
             ]);
 
         } catch (Exception $e) {
@@ -213,18 +239,38 @@ class CronService
     public function syncSpecificDate(int $blogId, string $date, string $syncType = 'all'): array
     {
         $result = [];
+        $allLedgerIds = [];
 
         try {
             if ($syncType === 'all' || $syncType === 'products') {
-                $result['products'] = $this->calculateRollUp->execute($blogId, $date);
+                $productResult = $this->calculateRollUp->execute($blogId, $date);
+                $result['products'] = $productResult;
+                if (!empty($productResult['ledger_ids'])) {
+                    $allLedgerIds = array_merge($allLedgerIds, $productResult['ledger_ids']);
+                }
             }
 
             if ($syncType === 'all' || $syncType === 'inventory') {
-                $result['inventory'] = $this->calculateInventory->execute($blogId, $date);
+                $inventoryResult = $this->calculateInventory->execute($blogId, $date);
+                $result['inventory'] = $inventoryResult;
+                if (!empty($inventoryResult['ledger_ids'])) {
+                    $allLedgerIds = array_merge($allLedgerIds, $inventoryResult['ledger_ids']);
+                }
             }
 
             if ($syncType === 'all' || $syncType === 'orders') {
-                $result['orders'] = $this->calculateOrder->execute($blogId, $date);
+                $orderResult = $this->calculateOrder->execute($blogId, $date);
+                $result['orders'] = $orderResult;
+                if (!empty($orderResult['ledger_ids'])) {
+                    $allLedgerIds = array_merge($allLedgerIds, $orderResult['ledger_ids']);
+                }
+            }
+
+            // Đánh cờ is_croned = 1 sau khi tất cả roll-up xong
+            if (!empty($allLedgerIds)) {
+                $allLedgerIds = array_unique($allLedgerIds);
+                $this->dataSource->markLedgersAsProcessed($allLedgerIds);
+                $result['ledgers_processed'] = count($allLedgerIds);
             }
 
             if ($syncType === 'all') {
@@ -268,9 +314,29 @@ class CronService
             $result['total']++;
 
             try {
-                $this->calculateRollUp->execute($blogId, $date);
-                $this->calculateInventory->execute($blogId, $date);
-                $this->calculateOrder->execute($blogId, $date);
+                $allLedgerIds = [];
+
+                // Calculate all roll-ups
+                $productResult = $this->calculateRollUp->execute($blogId, $date);
+                if (!empty($productResult['ledger_ids'])) {
+                    $allLedgerIds = array_merge($allLedgerIds, $productResult['ledger_ids']);
+                }
+
+                $inventoryResult = $this->calculateInventory->execute($blogId, $date);
+                if (!empty($inventoryResult['ledger_ids'])) {
+                    $allLedgerIds = array_merge($allLedgerIds, $inventoryResult['ledger_ids']);
+                }
+
+                $orderResult = $this->calculateOrder->execute($blogId, $date);
+                if (!empty($orderResult['ledger_ids'])) {
+                    $allLedgerIds = array_merge($allLedgerIds, $orderResult['ledger_ids']);
+                }
+
+                // Đánh cờ is_croned = 1 sau khi tất cả roll-up xong
+                if (!empty($allLedgerIds)) {
+                    $allLedgerIds = array_unique($allLedgerIds);
+                    $this->dataSource->markLedgersAsProcessed($allLedgerIds);
+                }
 
                 if ($syncToParents) {
                     $this->syncToParent->execute($blogId, $date);

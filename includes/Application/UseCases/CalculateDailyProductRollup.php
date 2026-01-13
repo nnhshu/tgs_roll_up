@@ -51,7 +51,7 @@ class CalculateDailyProductRollup
      * @param int $blogId Blog ID
      * @param string $date Ngày (Y-m-d)
      * @param int|null $syncType Loại sync (null = all)
-     * @return array Mảng roll-up records đã tạo
+     * @return array ['saved_ids' => array, 'ledger_ids' => array]
      */
     public function execute(int $blogId, string $date, ?int $syncType = null): array
     {
@@ -65,7 +65,7 @@ class CalculateDailyProductRollup
             $ledgers = $this->dataSource->getLedgers($date, $types, true);
 
             if (empty($ledgers)) {
-                return [];
+                return ['saved_ids' => [], 'ledger_ids' => []];
             }
 
             $ledger_ids = array_column($ledgers, 'local_ledger_id');
@@ -135,9 +135,11 @@ class CalculateDailyProductRollup
                 }
             }
 
-            $this->dataSource->markLedgersAsProcessed($ledger_ids);
-
-            return $saved_ids;
+            // Không đánh cờ is_croned ở đây nữa, trả về ledger_ids để CronService xử lý
+            return [
+                'saved_ids' => $saved_ids,
+                'ledger_ids' => $ledger_ids,
+            ];
         });
     }
 

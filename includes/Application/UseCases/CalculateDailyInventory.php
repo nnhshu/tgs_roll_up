@@ -44,9 +44,9 @@ class CalculateDailyInventory
      *
      * @param int $blogId Blog ID
      * @param string $date Ngày (Y-m-d)
-     * @return int Number of records created
+     * @return array ['saved_count' => int, 'ledger_ids' => array]
      */
-    public function execute(int $blogId, string $date): int
+    public function execute(int $blogId, string $date): array
     {
         error_log("Calculating daily inventory for blog ID {$blogId} on date {$date}");
         return $this->blogContext->executeInBlog($blogId, function() use ($blogId, $date) {
@@ -78,7 +78,7 @@ class CalculateDailyInventory
 
             if (empty($ledgers)) {
                 error_log("No ledgers found for inventory on date {$date}");
-                return 0;
+                return ['saved_count' => 0, 'ledger_ids' => []];
             }
 
             // Lấy ledger IDs
@@ -89,7 +89,7 @@ class CalculateDailyInventory
 
             if (empty($items)) {
                 error_log("No items found for ledgers");
-                return 0;
+                return ['saved_count' => 0, 'ledger_ids' => $ledgerIds];
             }
 
             // Group items by ledger_id để biết type
@@ -175,7 +175,11 @@ class CalculateDailyInventory
                 $this->updateMonthlyTotalForProduct($blogId, $productId, $data['global_product_name_id'], $year, $month, $data['qty'], $data['value']);
             }
 
-            return $savedCount;
+            // Không đánh cờ is_croned ở đây, trả về ledger_ids để CronService xử lý
+            return [
+                'saved_count' => $savedCount,
+                'ledger_ids' => $ledgerIds,
+            ];
         });
     }
 

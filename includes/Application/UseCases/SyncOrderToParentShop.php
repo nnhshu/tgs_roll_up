@@ -88,43 +88,56 @@ class SyncOrderToParentShop
             return $result;
         }
 
-        // Lấy monthly total orders của shop con (roll_up_day = 0)
-        $sourceRecord = $this->orderRepo->findMonthlyTotal($sourceBlogId, $year, $month);
+        // Lấy TẤT CẢ order records của shop con cho tháng này (cả daily và monthly total)
+        $firstDayOfMonth = sprintf('%04d-%02d-01', $year, $month);
+        $lastDayOfMonth = sprintf('%04d-%02d-%02d', $year, $month, cal_days_in_month(CAL_GREGORIAN, $month, $year));
 
-        if (empty($sourceRecord)) {
+        $sourceRecords = $this->orderRepo->findByDateRange($sourceBlogId, $firstDayOfMonth, $lastDayOfMonth);
+
+        if (empty($sourceRecords)) {
             $result['message'] = 'No order data found for source blog';
             return $result;
         }
 
-        // Sync record lên parent
+        // Sync từng record lên parent
+        $syncedCount = 0;
+        $totalOrderCount = 0;
+        $totalOrderValue = 0;
+
         try {
-            // Tạo data để sync (giữ nguyên blog_id của shop con)
-            $parentData = [
-                'blog_id' => $sourceBlogId,  // QUAN TRỌNG: giữ blog_id của con
-                'roll_up_date' => $sourceRecord['roll_up_date'],
-                'roll_up_day' => 0,  // Monthly total
-                'count' => $sourceRecord['count'],
-                'value' => $sourceRecord['value'],
-            ];
-
-            // Sync meta
-            if (!empty($sourceRecord['meta'])) {
-                $parentData['meta'] = $sourceRecord['meta'];
-            }
-
-            // Lưu vào parent blog (overwrite = true để thay thế data cũ)
-            $orderId = $this->blogContext->executeInBlog($parentBlogId, function() use ($parentData) {
-                return $this->orderRepo->save($parentData, true);
-            });
-
-            if ($orderId) {
-                $result['success'][] = [
-                    'parent_blog_id' => $parentBlogId,
-                    'records_synced' => 1,
-                    'order_count' => $sourceRecord['count'],
-                    'order_value' => $sourceRecord['value'],
+            foreach ($sourceRecords as $record) {
+                // Tạo data để sync (giữ nguyên blog_id của shop con)
+                $parentData = [
+                    'blog_id' => $sourceBlogId,  // QUAN TRỌNG: giữ blog_id của con
+                    'roll_up_date' => $record['roll_up_date'],
+                    'roll_up_day' => $record['roll_up_day'],  // Giữ nguyên roll_up_day (có thể là 0 hoặc ngày cụ thể)
+                    'count' => $record['count'],
+                    'value' => $record['value'],
                 ];
+
+                // Sync meta
+                if (!empty($record['meta'])) {
+                    $parentData['meta'] = $record['meta'];
+                }
+
+                // Lưu vào parent blog (overwrite = true để thay thế data cũ)
+                $orderId = $this->blogContext->executeInBlog($parentBlogId, function() use ($parentData) {
+                    return $this->orderRepo->save($parentData, true);
+                });
+
+                if ($orderId) {
+                    $syncedCount++;
+                    $totalOrderCount += intval($record['count']);
+                    $totalOrderValue += floatval($record['value']);
+                }
             }
+
+            $result['success'][] = [
+                'parent_blog_id' => $parentBlogId,
+                'records_synced' => $syncedCount,
+                'order_count' => $totalOrderCount,
+                'order_value' => $totalOrderValue,
+            ];
 
         } catch (Exception $e) {
             $result['failed'][] = [
@@ -133,7 +146,7 @@ class SyncOrderToParentShop
             ];
         }
 
-        $result['total_synced'] = !empty($result['success']) ? 1 : 0;
+        $result['total_synced'] = $syncedCount;
 
         // Log kết quả
         $this->logSyncResult($sourceBlogId, $result);
