@@ -210,14 +210,12 @@ class TGS_Admin_Page
      */
     public function render_dashboard_page()
     {
-        error_log("Rendering dashboard page");
         $blog_id = get_current_blog_id();
 
         // Đảm bảo các bảng tồn tại trước khi thực hiện các thao tác khác
         $this->database->ensure_tables_exist();
 
         $config = $this->database->get_config($blog_id);
-        error_log(json_encode($config));
         $sync_status = $this->database->get_sync_status($blog_id);
         $cron_info = $this->cron_handler->get_next_scheduled();
         $recent_logs = $this->sync_manager->get_recent_sync_logs($blog_id, 5);
@@ -603,7 +601,6 @@ class TGS_Admin_Page
     {
         check_ajax_referer('tgs_sync_roll_up_nonce', 'nonce');
 
-        error_log("Handling manual sync AJAX request2213");
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
@@ -1103,7 +1100,6 @@ class TGS_Admin_Page
      */
     private function createDatabaseWrapper()
     {
-        error_log("Creating database wrapper");
         $configRepo = $this->configRepo;
 
         return new class($configRepo) {

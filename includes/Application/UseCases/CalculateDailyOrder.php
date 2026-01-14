@@ -48,13 +48,11 @@ class CalculateDailyOrder
      */
     public function execute(int $blogId, string $date): array
     {
-        error_log("Calculating daily orders for blog ID {$blogId} on date {$date}");
         return $this->blogContext->executeInBlog($blogId, function() use ($blogId, $date) {
             // Get today's orders (type = 10 = SALES, not deleted, not croned)
             $todayOrders = $this->dataSource->getOrders($date);
 
             if (empty($todayOrders)) {
-                error_log("No orders found for date {$date}");
                 return ['daily' => 0, 'monthly' => 0, 'ledger_ids' => []];
             }
 

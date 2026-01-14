@@ -97,7 +97,6 @@ class SyncAjaxHandler
      */
     public function handleManualSync(): void
     {
-        error_log("Handling manual sync AJAX request");
         check_ajax_referer('tgs_sync_roll_up_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
@@ -125,8 +124,6 @@ class SyncAjaxHandler
                 ]);
                 return;
             }
-
-            error_log("Manual sync: Found " . count($allLedgers) . " unprocessed ledgers for date {$date}");
 
             // BƯỚC 2: Phân loại ledgers theo type
             $ledgersByType = $this->groupLedgersByType($allLedgers);
@@ -179,9 +176,7 @@ class SyncAjaxHandler
 
             // BƯỚC 4: Đánh dấu TẤT CẢ ledgers đã xử lý
             if (!empty($allLedgerIds)) {
-                error_log("Manual sync: About to mark " . count($allLedgerIds) . " ledgers as processed");
                 $marked = $this->dataSource->markLedgersAsProcessed($allLedgerIds);
-                error_log("Manual sync: Mark result = " . ($marked ? 'success' : 'failed'));
             }
 
             // BƯỚC 5: Sync to parent

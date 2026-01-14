@@ -252,28 +252,28 @@ if (!defined('ABSPATH')) {
                     </th>
                     <td>
                         <select name="sync_frequency" id="sync_frequency">
-                            <option value="every_fifteen_minutes" <?php selected($config->sync_frequency ?? '', 'every_fifteen_minutes'); ?>>
+                            <option value="every_fifteen_minutes" <?php selected($config->sync_interval ?? '', 'every_fifteen_minutes'); ?>>
                                 <?php esc_html_e('Mỗi 15 phút', 'tgs-sync-roll-up'); ?>
                             </option>
-                            <option value="every_thirty_minutes" <?php selected($config->sync_frequency ?? '', 'every_thirty_minutes'); ?>>
+                            <option value="every_thirty_minutes" <?php selected($config->sync_interval ?? '', 'every_thirty_minutes'); ?>>
                                 <?php esc_html_e('Mỗi 30 phút', 'tgs-sync-roll-up'); ?>
                             </option>
-                            <option value="hourly" <?php selected($config->sync_frequency ?? 'hourly', 'hourly'); ?>>
+                            <option value="hourly" <?php selected($config->sync_interval ?? 'hourly', 'hourly'); ?>>
                                 <?php esc_html_e('Mỗi giờ', 'tgs-sync-roll-up'); ?>
                             </option>
-                            <option value="every_two_hours" <?php selected($config->sync_frequency ?? '', 'every_two_hours'); ?>>
+                            <option value="every_two_hours" <?php selected($config->sync_interval ?? '', 'every_two_hours'); ?>>
                                 <?php esc_html_e('Mỗi 2 giờ', 'tgs-sync-roll-up'); ?>
                             </option>
-                            <option value="every_four_hours" <?php selected($config->sync_frequency ?? '', 'every_four_hours'); ?>>
+                            <option value="every_four_hours" <?php selected($config->sync_interval ?? '', 'every_four_hours'); ?>>
                                 <?php esc_html_e('Mỗi 4 giờ', 'tgs-sync-roll-up'); ?>
                             </option>
-                            <option value="every_six_hours" <?php selected($config->sync_frequency ?? '', 'every_six_hours'); ?>>
+                            <option value="every_six_hours" <?php selected($config->sync_interval ?? '', 'every_six_hours'); ?>>
                                 <?php esc_html_e('Mỗi 6 giờ', 'tgs-sync-roll-up'); ?>
                             </option>
-                            <option value="twicedaily" <?php selected($config->sync_frequency ?? '', 'twicedaily'); ?>>
+                            <option value="twicedaily" <?php selected($config->sync_interval ?? '', 'twicedaily'); ?>>
                                 <?php esc_html_e('2 lần/ngày', 'tgs-sync-roll-up'); ?>
                             </option>
-                            <option value="daily" <?php selected($config->sync_frequency ?? '', 'daily'); ?>>
+                            <option value="daily" <?php selected($config->sync_interval ?? '', 'daily'); ?>>
                                 <?php esc_html_e('Hàng ngày', 'tgs-sync-roll-up'); ?>
                             </option>
                         </select>

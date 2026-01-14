@@ -48,7 +48,6 @@ class CalculateDailyAccounting
      */
     public function execute(int $blogId, string $date): array
     {
-        error_log("Calculating daily accounting for blog ID {$blogId} on date {$date}");
         return $this->blogContext->executeInBlog($blogId, function() use ($blogId, $date) {
             // Lấy ledgers với type 7 (thu) và 8 (chi)
             $types = [
@@ -59,7 +58,6 @@ class CalculateDailyAccounting
             $ledgers = $this->dataSource->getLedgers($date, $types, false);
 
             if (empty($ledgers)) {
-                error_log("No accounting ledgers found for date {$date}");
                 return ['saved_count' => 0, 'ledger_ids' => []];
             }
 

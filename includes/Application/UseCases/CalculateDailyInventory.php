@@ -48,7 +48,6 @@ class CalculateDailyInventory
      */
     public function execute(int $blogId, string $date): array
     {
-        error_log("Calculating daily inventory for blog ID {$blogId} on date {$date}");
         return $this->blogContext->executeInBlog($blogId, function() use ($blogId, $date) {
             // Lấy ledgers với type 1, 2, 6
             $types = [
@@ -60,7 +59,6 @@ class CalculateDailyInventory
             $ledgers = $this->dataSource->getLedgers($date, $types, false);
 
             if (empty($ledgers)) {
-                error_log("No ledgers found for inventory on date {$date}");
                 return ['saved_count' => 0, 'ledger_ids' => []];
             }
 
@@ -115,7 +113,6 @@ class CalculateDailyInventory
         $items = $this->dataSource->getLedgerItems($ledgers);
 
         if (empty($items)) {
-            error_log("No items found for ledgers");
             return ['saved_count' => 0, 'ledger_ids' => $ledgerIds];
         }
 

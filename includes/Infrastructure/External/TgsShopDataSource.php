@@ -51,7 +51,6 @@ class TgsShopDataSource implements DataSourceInterface
      */
     public function getLedgers(string $date, array $types = [], bool $processedOnly = false): array
     {
-        error_log("types: " . implode(',', $types));
         if (!$this->isAvailable()) {
             return [];
         }
@@ -112,7 +111,6 @@ class TgsShopDataSource implements DataSourceInterface
 
         // Loại bỏ duplicate
         $allItemIds = array_unique($allItemIds);
-        error_log("Fetching ledger items: " . implode(',', $allItemIds));
         if (empty($allItemIds)) {
             return [];
         }

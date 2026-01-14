@@ -191,9 +191,7 @@ class CronService
 
             // BƯỚC 4: Đánh dấu TẤT CẢ ledgers đã xử lý
             if (!empty($allLedgerIds)) {
-                error_log("CronService: About to mark " . count($allLedgerIds) . " ledgers as processed");
                 $marked = $this->dataSource->markLedgersAsProcessed($allLedgerIds);
-                error_log("CronService: Mark result = " . ($marked ? 'success' : 'failed'));
             }
 
             // BƯỚC 5: Sync to parent
@@ -490,3 +488,11 @@ class CronService
         return array_slice(array_reverse($logs), 0, $limit);
     }
 }
+
+add_filter('cron_schedules', function($schedules) {
+    $schedules['every_minute'] = array(
+        'interval' => 60,
+        'display'  => __('Every Minute')
+    );
+    return $schedules;
+});

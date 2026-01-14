@@ -39,13 +39,11 @@ class AccountingRollUpRepository
         $table_exists = $this->wpdb->get_var("SHOW TABLES LIKE '{$table}'");
 
         if (!$table_exists) {
-            error_log("AccountingRollUpRepository: Table {$table} does not exist, creating it now...");
 
             // Create table using the Database class method
             $blog_id = get_current_blog_id();
             TGS_Sync_Roll_Up_Database::create_accounting_roll_up_table($blog_id);
 
-            error_log("AccountingRollUpRepository: Table {$table} created successfully");
         }
     }
 
