@@ -87,7 +87,6 @@ class TGS_Admin_Page
         add_action('wp_ajax_tgs_get_dashboard_data', array($this, 'ajax_get_dashboard_data'));
         add_action('wp_ajax_tgs_get_stats_by_date', array($this, 'ajax_get_stats_by_date'));
         add_action('wp_ajax_tgs_get_child_shop_detail', array($this, 'ajax_get_child_shop_detail'));
-        add_action('wp_ajax_tgs_get_inventory_data', array($this, 'ajax_get_inventory_data'));
     }
 
     /**
@@ -1035,64 +1034,6 @@ class TGS_Admin_Page
         restore_current_blog();
 
         return $name;
-    }
-
-    /**
-     * Render inventory page
-     */
-    public function render_inventory_page()
-    {
-        include TGS_SYNC_ROLL_UP_PATH . 'admin/views/inventory-page.php';
-    }
-
-    /**
-     * AJAX: Get inventory data
-     */
-    public function ajax_get_inventory_data()
-    {
-        check_ajax_referer('tgs_sync_roll_up_nonce', 'nonce');
-
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(array('message' => 'Permission denied'));
-        }
-
-        $blog_id = get_current_blog_id();
-        $date = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : current_time('Y-m-d');
-
-        // Validate date
-        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
-            wp_send_json_error(array('message' => 'Invalid date format'));
-        }
-
-        global $wpdb;
-        $table = $wpdb->prefix . 'inventory_roll_up';
-        $date_parts = explode('-', $date);
-        $day = intval($date_parts[2]);
-        $month = intval($date_parts[1]);
-        $year = intval($date_parts[0]);
-
-        $inventory = $wpdb->get_results($wpdb->prepare(
-            "SELECT
-                local_product_name_id,
-                global_product_name_id,
-                inventory_qty,
-                inventory_value
-             FROM {$table}
-             WHERE blog_id = %d
-               AND roll_up_day = %d
-               AND roll_up_month = %d
-               AND roll_up_year = %d
-             ORDER BY local_product_name_id ASC",
-            $blog_id,
-            $day,
-            $month,
-            $year
-        ), ARRAY_A);
-
-        wp_send_json_success(array(
-            'inventory' => $inventory,
-            'date' => $date,
-        ));
     }
 
     /**

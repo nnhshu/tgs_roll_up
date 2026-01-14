@@ -42,7 +42,6 @@ class DashboardAjaxHandler
         add_action('wp_ajax_tgs_get_dashboard_data', [$this, 'handleGetDashboardData']);
         add_action('wp_ajax_tgs_get_stats_by_date', [$this, 'handleGetStatsByDate']);
         add_action('wp_ajax_tgs_get_child_shop_detail', [$this, 'handleGetChildShopDetail']);
-        add_action('wp_ajax_tgs_get_inventory_data', [$this, 'handleGetInventoryData']);
     }
 
     /**
@@ -319,63 +318,6 @@ class DashboardAjaxHandler
         }
     }
 
-    /**
-     * Handle get inventory data
-     */
-    public function handleGetInventoryData(): void
-    {
-        check_ajax_referer('tgs_sync_roll_up_nonce', 'nonce');
-
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error(['message' => __('Permission denied', 'tgs-sync-roll-up')]);
-        }
-
-        // Ensure tables exist
-        $this->ensureTablesExist();
-
-        $blogId = get_current_blog_id();
-        $date = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : current_time('Y-m-d');
-
-        // Validate date
-        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
-            wp_send_json_error(['message' => __('Invalid date format', 'tgs-sync-roll-up')]);
-        }
-
-        try {
-            global $wpdb;
-            $table = $wpdb->prefix . 'inventory_roll_up';
-            $dateParts = explode('-', $date);
-            $day = intval($dateParts[2]);
-            $month = intval($dateParts[1]);
-            $year = intval($dateParts[0]);
-
-            $inventory = $wpdb->get_results($wpdb->prepare(
-                "SELECT
-                    local_product_name_id,
-                    global_product_name_id,
-                    inventory_qty,
-                    inventory_value
-                 FROM {$table}
-                 WHERE blog_id = %d
-                   AND roll_up_day = %d
-                   AND roll_up_month = %d
-                   AND roll_up_year = %d
-                 ORDER BY local_product_name_id ASC",
-                $blogId,
-                $day,
-                $month,
-                $year
-            ), ARRAY_A);
-
-            wp_send_json_success([
-                'inventory' => $inventory,
-                'date' => $date,
-            ]);
-
-        } catch (Exception $e) {
-            wp_send_json_error(['message' => $e->getMessage()]);
-        }
-    }
 
     /**
      * Get blog name
