@@ -65,6 +65,10 @@ if (!defined('TGS_PRODUCT_TAG_NEW')) {
     define('TGS_PRODUCT_TAG_NEW', 3);
 }
 
+if (!defined('TGSR_TABLE_SYNC_ROLL_UP_CONFIG')) {
+    define('TGSR_TABLE_SYNC_ROLL_UP_CONFIG', 'wp_sync_roll_up_config');
+}
+
 /**
  * Main Plugin Class
  */
