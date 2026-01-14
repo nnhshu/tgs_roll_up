@@ -52,9 +52,9 @@ class CalculateDailyInventory
         return $this->blogContext->executeInBlog($blogId, function() use ($blogId, $date) {
             // Lấy ledgers với type 1, 2, 6
             $types = [
-                TGS_LEDGER_TYPE_IMPORT,  // 1 - Nhập hàng
-                TGS_LEDGER_TYPE_EXPORT,  // 2 - Xuất hàng
-                TGS_LEDGER_TYPE_DAMAGE,  // 6 - Hàng hỏng
+                TGS_LEDGER_TYPE_IMPORT_ROLL_UP,  // 1 - Nhập hàng
+                TGS_LEDGER_TYPE_EXPORT_ROLL_UP,  // 2 - Xuất hàng
+                TGS_LEDGER_TYPE_DAMAGE_ROLL_UP,  // 6 - Hàng hỏng
             ];
 
             $ledgers = $this->dataSource->getLedgers($date, $types, false);
@@ -158,12 +158,12 @@ class CalculateDailyInventory
                 }
 
                 // Type 1 = Import (+)
-                if ($ledgerType === TGS_LEDGER_TYPE_IMPORT) {
+                if ($ledgerType === TGS_LEDGER_TYPE_IMPORT_ROLL_UP) {
                     $dailyInventory[$productId]['qty'] += $quantity;
                     $dailyInventory[$productId]['value'] += $value;
                 }
                 // Type 2 = Export (-) hoặc Type 6 = Damage (-)
-                elseif ($ledgerType === TGS_LEDGER_TYPE_EXPORT || $ledgerType === TGS_LEDGER_TYPE_DAMAGE) {
+                elseif ($ledgerType === TGS_LEDGER_TYPE_EXPORT_ROLL_UP || $ledgerType === TGS_LEDGER_TYPE_DAMAGE_ROLL_UP) {
                     $dailyInventory[$productId]['qty'] -= $quantity;
                     $dailyInventory[$productId]['value'] -= $value;
                 }

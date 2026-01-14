@@ -830,8 +830,8 @@ class TGS_Admin_Page
              AND roll_up_date BETWEEN %s AND %s
              GROUP BY roll_up_date
              ORDER BY roll_up_date ASC",
-            TGS_LEDGER_TYPE_SALES,
-            TGS_LEDGER_TYPE_RETURN,
+            TGS_LEDGER_TYPE_SALES_ROLL_UP,
+            TGS_LEDGER_TYPE_RETURN_ROLL_UP,
             $blog_id,
             $start_date,
             $end_date

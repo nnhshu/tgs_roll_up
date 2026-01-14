@@ -145,6 +145,7 @@ class TGS_Sync_Roll_Up_Database
             roll_up_year INT NOT NULL,
             inventory_qty INT DEFAULT 0,
             inventory_value DECIMAL(15,2) DEFAULT 0,
+            daily_cogs_value DECIMAL(15,2) DEFAULT 0,
             meta JSON,
             created_at DATETIME NOT NULL,
             updated_at DATETIME,

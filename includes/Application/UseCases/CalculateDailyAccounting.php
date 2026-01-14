@@ -52,8 +52,8 @@ class CalculateDailyAccounting
         return $this->blogContext->executeInBlog($blogId, function() use ($blogId, $date) {
             // Lấy ledgers với type 7 (thu) và 8 (chi)
             $types = [
-                TGS_LEDGER_TYPE_RECEIPT,  // 7 - Thu tiền
-                TGS_LEDGER_TYPE_PAYMENT,  // 8 - Chi tiền
+                TGS_LEDGER_TYPE_RECEIPT_ROLL_UP,  // 7 - Thu tiền
+                TGS_LEDGER_TYPE_PAYMENT_ROLL_UP,  // 8 - Chi tiền
             ];
 
             $ledgers = $this->dataSource->getLedgers($date, $types, false);
@@ -114,10 +114,10 @@ class CalculateDailyAccounting
             $ledgerType = intval($ledger['local_ledger_type']);
             $amount = floatval($ledger['local_ledger_total_amount'] ?? 0);
 
-            if ($ledgerType === TGS_LEDGER_TYPE_RECEIPT) {
+            if ($ledgerType === TGS_LEDGER_TYPE_RECEIPT_ROLL_UP) {
                 // Type 7 = Thu
                 $totalIncome += $amount;
-            } elseif ($ledgerType === TGS_LEDGER_TYPE_PAYMENT) {
+            } elseif ($ledgerType === TGS_LEDGER_TYPE_PAYMENT_ROLL_UP) {
                 // Type 8 = Chi
                 $totalExpense += $amount;
             }

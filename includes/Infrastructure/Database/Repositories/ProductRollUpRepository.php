@@ -151,9 +151,9 @@ class ProductRollUpRepository implements RollUpRepositoryInterface
              FROM {$table}
              WHERE blog_id = %d
              AND roll_up_date BETWEEN %s AND %s",
-            TGS_LEDGER_TYPE_SALES,
-            TGS_LEDGER_TYPE_RETURN,
-            TGS_LEDGER_TYPE_PURCHASE,
+            TGS_LEDGER_TYPE_SALES_ROLL_UP,
+            TGS_LEDGER_TYPE_RETURN_ROLL_UP,
+            TGS_LEDGER_TYPE_PURCHASE_ROLL_UP,
             $blogId,
             $fromDate,
             $toDate

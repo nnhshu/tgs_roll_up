@@ -111,7 +111,7 @@ class CalculateDailyProductRollup
         foreach ($items as $item) {
             $product_id = $item['local_product_name_id'];
             // Type cố định là 10 (SALES) cho product roll-up
-            $ledger_type = TGS_LEDGER_TYPE_SALES;
+            $ledger_type = TGS_LEDGER_TYPE_SALES_ROLL_UP;
             $key = $product_id . '_' . $ledger_type;
 
             if (!isset($roll_up_data[$key])) {
@@ -184,7 +184,7 @@ class CalculateDailyProductRollup
         }
 
         return [
-            TGS_LEDGER_TYPE_SALES,     // 10 - Bán hàng (dùng cho dashboard & order)
+            TGS_LEDGER_TYPE_SALES_ROLL_UP,     // 10 - Bán hàng (dùng cho dashboard & order)
             11,    // 11 - Hoàn trả (dùng cho dashboard)
         ];
     }

@@ -133,6 +133,7 @@ class CronService
      */
     public function runSyncCron(): void
     {
+        error_log("CronService: Starting sync cron" . time());
         $blogId = get_current_blog_id();
         $date = current_time('Y-m-d');
 
@@ -154,36 +155,36 @@ class CronService
             $allLedgerIds = array_column($allLedgers, 'local_ledger_id');
 
             // 3.1. Calculate product roll-up (type 10, 11)
-            if (!empty($ledgersByType[TGS_LEDGER_TYPE_SALES]) || !empty($ledgersByType[11])) {
+            if (!empty($ledgersByType[TGS_LEDGER_TYPE_SALES_ROLL_UP]) || !empty($ledgersByType[11])) {
                 $productLedgers = array_merge(
-                    $ledgersByType[TGS_LEDGER_TYPE_SALES] ?? [],
+                    $ledgersByType[TGS_LEDGER_TYPE_SALES_ROLL_UP] ?? [],
                     $ledgersByType[11] ?? []
                 );
                 $this->calculateRollUp->executeWithLedgers($blogId, $date, $productLedgers);
             }
 
             // 3.2. Calculate inventory (type 1, 2, 6)
-            if (!empty($ledgersByType[TGS_LEDGER_TYPE_IMPORT]) ||
-                !empty($ledgersByType[TGS_LEDGER_TYPE_EXPORT]) ||
-                !empty($ledgersByType[TGS_LEDGER_TYPE_DAMAGE])) {
+            if (!empty($ledgersByType[TGS_LEDGER_TYPE_IMPORT_ROLL_UP]) ||
+                !empty($ledgersByType[TGS_LEDGER_TYPE_EXPORT_ROLL_UP]) ||
+                !empty($ledgersByType[TGS_LEDGER_TYPE_DAMAGE_ROLL_UP])) {
                 $inventoryLedgers = array_merge(
-                    $ledgersByType[TGS_LEDGER_TYPE_IMPORT] ?? [],
-                    $ledgersByType[TGS_LEDGER_TYPE_EXPORT] ?? [],
-                    $ledgersByType[TGS_LEDGER_TYPE_DAMAGE] ?? []
+                    $ledgersByType[TGS_LEDGER_TYPE_IMPORT_ROLL_UP] ?? [],
+                    $ledgersByType[TGS_LEDGER_TYPE_EXPORT_ROLL_UP] ?? [],
+                    $ledgersByType[TGS_LEDGER_TYPE_DAMAGE_ROLL_UP] ?? []
                 );
                 $this->calculateInventory->executeWithLedgers($blogId, $date, $inventoryLedgers);
             }
 
             // 3.3. Calculate orders (type 10)
-            if (!empty($ledgersByType[TGS_LEDGER_TYPE_SALES])) {
-                $this->calculateOrder->executeWithLedgers($blogId, $date, $ledgersByType[TGS_LEDGER_TYPE_SALES]);
+            if (!empty($ledgersByType[TGS_LEDGER_TYPE_SALES_ROLL_UP])) {
+                $this->calculateOrder->executeWithLedgers($blogId, $date, $ledgersByType[TGS_LEDGER_TYPE_SALES_ROLL_UP]);
             }
 
             // 3.4. Calculate accounting (type 7, 8)
-            if (!empty($ledgersByType[TGS_LEDGER_TYPE_RECEIPT]) || !empty($ledgersByType[TGS_LEDGER_TYPE_PAYMENT])) {
+            if (!empty($ledgersByType[TGS_LEDGER_TYPE_RECEIPT_ROLL_UP]) || !empty($ledgersByType[TGS_LEDGER_TYPE_PAYMENT_ROLL_UP])) {
                 $accountingLedgers = array_merge(
-                    $ledgersByType[TGS_LEDGER_TYPE_RECEIPT] ?? [],
-                    $ledgersByType[TGS_LEDGER_TYPE_PAYMENT] ?? []
+                    $ledgersByType[TGS_LEDGER_TYPE_RECEIPT_ROLL_UP] ?? [],
+                    $ledgersByType[TGS_LEDGER_TYPE_PAYMENT_ROLL_UP] ?? []
                 );
                 $this->calculateAccounting->executeWithLedgers($blogId, $date, $accountingLedgers);
             }

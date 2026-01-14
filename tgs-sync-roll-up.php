@@ -26,29 +26,29 @@ define('TGS_SYNC_ROLL_UP_URL', plugin_dir_url(__FILE__));
 define('TGS_SYNC_ROLL_UP_BASENAME', plugin_basename(__FILE__));
 
 // Ledger type constants (nếu chưa được định nghĩa bởi plugin tgs_shop_management)
-if (!defined('TGS_LEDGER_TYPE_IMPORT')) {
-    define('TGS_LEDGER_TYPE_IMPORT', 1);      // Nhập hàng
+if (!defined('TGS_LEDGER_TYPE_IMPORT_ROLL_UP')) {
+    define('TGS_LEDGER_TYPE_IMPORT_ROLL_UP', 1);      // Nhập hàng
 }
-if (!defined('TGS_LEDGER_TYPE_EXPORT')) {
-    define('TGS_LEDGER_TYPE_EXPORT', 2);      // Xuất hàng
+if (!defined('TGS_LEDGER_TYPE_EXPORT_ROLL_UP')) {
+    define('TGS_LEDGER_TYPE_EXPORT_ROLL_UP', 2);      // Xuất hàng
 }
-if (!defined('TGS_LEDGER_TYPE_DAMAGE')) {
-    define('TGS_LEDGER_TYPE_DAMAGE', 6);      // Hàng hỏng
+if (!defined('TGS_LEDGER_TYPE_DAMAGE_ROLL_UP')) {
+    define('TGS_LEDGER_TYPE_DAMAGE_ROLL_UP', 6);      // Hàng hỏng
 }
-if (!defined('TGS_LEDGER_TYPE_RECEIPT')) {
-    define('TGS_LEDGER_TYPE_RECEIPT', 7);     // Thu tiền
+if (!defined('TGS_LEDGER_TYPE_RECEIPT_ROLL_UP')) {
+    define('TGS_LEDGER_TYPE_RECEIPT_ROLL_UP', 7);     // Thu tiền
 }
-if (!defined('TGS_LEDGER_TYPE_PAYMENT')) {
-    define('TGS_LEDGER_TYPE_PAYMENT', 8);     // Chi tiền
+if (!defined('TGS_LEDGER_TYPE_PAYMENT_ROLL_UP')) {
+    define('TGS_LEDGER_TYPE_PAYMENT_ROLL_UP', 8);     // Chi tiền
 }
-if (!defined('TGS_LEDGER_TYPE_PURCHASE')) {
-    define('TGS_LEDGER_TYPE_PURCHASE', 9);    // Mua hàng
+if (!defined('TGS_LEDGER_TYPE_PURCHASE_ROLL_UP')) {
+    define('TGS_LEDGER_TYPE_PURCHASE_ROLL_UP', 9);    // Mua hàng
 }
-if (!defined('TGS_LEDGER_TYPE_SALES')) {
-    define('TGS_LEDGER_TYPE_SALES', 10);      // Bán hàng
+if (!defined('TGS_LEDGER_TYPE_SALES_ROLL_UP')) {
+    define('TGS_LEDGER_TYPE_SALES_ROLL_UP', 10);      // Bán hàng
 }
-if (!defined('TGS_LEDGER_TYPE_RETURN')) {
-    define('TGS_LEDGER_TYPE_RETURN', 11);     // Trả hàng
+if (!defined('TGS_LEDGER_TYPE_RETURN_ROLL_UP')) {
+    define('TGS_LEDGER_TYPE_RETURN_ROLL_UP', 11);     // Trả hàng
 }
 
 // Product tag constants
