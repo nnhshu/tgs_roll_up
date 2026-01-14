@@ -141,10 +141,10 @@ class CalculateDailyProductRollup
             $tax = floatval($item['local_ledger_item_tax_amount'] ?? 0);
 
             // Công thức theo yêu cầu:
-            // amount_after_tax += price * quantity - local_ledger_item_tax_amount
+            // amount_after_tax += price * quantity + local_ledger_item_tax_amount
             // tax += local_ledger_item_tax_amount
             // quantity += quantity
-            $amount_after_tax = ($price * $quantity) - $tax;
+            $amount_after_tax = ($price * $quantity) + $tax;
 
             $roll_up_data[$key]['amount_after_tax'] += $amount_after_tax;
             $roll_up_data[$key]['tax'] += $tax;
