@@ -252,6 +252,9 @@ if (!defined('ABSPATH')) {
                     </th>
                     <td>
                         <select name="sync_frequency" id="sync_frequency">
+                            <option value="every_three_minutes" <?php selected($config->sync_interval ?? '', 'every_three_minutes'); ?>>
+                                <?php esc_html_e('Mỗi 3 phút', 'tgs-sync-roll-up'); ?>
+                            </option>
                             <option value="every_fifteen_minutes" <?php selected($config->sync_interval ?? '', 'every_fifteen_minutes'); ?>>
                                 <?php esc_html_e('Mỗi 15 phút', 'tgs-sync-roll-up'); ?>
                             </option>

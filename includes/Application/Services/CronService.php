@@ -146,8 +146,6 @@ class CronService
                 return;
             }
 
-            error_log("CronService: Found " . count($allLedgers) . " unprocessed ledgers for date {$date}");
-
             // BƯỚC 2: Phân loại ledgers theo type
             $ledgersByType = $this->groupLedgersByType($allLedgers);
 
@@ -494,5 +492,37 @@ add_filter('cron_schedules', function($schedules) {
         'interval' => 60,
         'display'  => __('Every Minute')
     );
+
+    // Custom intervals for sync
+    $schedules['every_three_minutes'] = array(
+        'interval' => 180,
+        'display'  => __('Every 3 Minutes')
+    );
+
+    $schedules['every_fifteen_minutes'] = array(
+        'interval' => 900,  // 15 * 60
+        'display'  => __('Every 15 Minutes')
+    );
+
+    $schedules['every_thirty_minutes'] = array(
+        'interval' => 1800,  // 30 * 60
+        'display'  => __('Every 30 Minutes')
+    );
+
+    $schedules['every_two_hours'] = array(
+        'interval' => 7200,  // 2 * 60 * 60
+        'display'  => __('Every 2 Hours')
+    );
+
+    $schedules['every_four_hours'] = array(
+        'interval' => 14400,  // 4 * 60 * 60
+        'display'  => __('Every 4 Hours')
+    );
+
+    $schedules['every_six_hours'] = array(
+        'interval' => 21600,  // 6 * 60 * 60
+        'display'  => __('Every 6 Hours')
+    );
+
     return $schedules;
 });
