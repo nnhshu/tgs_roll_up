@@ -95,28 +95,28 @@ class TGS_Sync_Roll_Up_Database
         $charset_collate = $wpdb->get_charset_collate();
         $table_name = $wpdb->prefix . 'product_roll_up';
 
-        $sql = "CREATE TABLE $table_name (
-            roll_up_id BIGINT NOT NULL AUTO_INCREMENT,
-            blog_id BIGINT,
-            local_product_name_id BIGINT NOT NULL,
-            global_product_name_id BIGINT,
-            roll_up_date DATE NOT NULL,
-            roll_up_day INT NOT NULL,
-            roll_up_month INT NOT NULL,
-            roll_up_year INT NOT NULL,
-            amount_after_tax DECIMAL(15,2) DEFAULT 0,
-            tax DECIMAL(15,2) DEFAULT 0,
-            quantity INT DEFAULT 0,
-            type TINYINT DEFAULT 0,
-            meta JSON,
-            created_at DATETIME NOT NULL,
-            updated_at DATETIME,
-
-            PRIMARY KEY (roll_up_id),
-            UNIQUE KEY uk_blog_day_month_year_product_type (blog_id, roll_up_day, roll_up_month, roll_up_year, local_product_name_id, type),
-            KEY idx_blog_id (blog_id),
-            KEY idx_type (type)
-        ) $charset_collate;";
+        // dbDelta() format requirements
+        $sql = "CREATE TABLE {$table_name} (
+  roll_up_id bigint(20) NOT NULL AUTO_INCREMENT,
+  blog_id bigint(20) DEFAULT NULL,
+  local_product_name_id bigint(20) NOT NULL,
+  global_product_name_id bigint(20) DEFAULT NULL,
+  roll_up_date date NOT NULL,
+  roll_up_day int(11) NOT NULL,
+  roll_up_month int(11) NOT NULL,
+  roll_up_year int(11) NOT NULL,
+  amount_after_tax decimal(15,2) DEFAULT 0,
+  tax decimal(15,2) DEFAULT 0,
+  quantity int(11) DEFAULT 0,
+  type tinyint(4) DEFAULT 0,
+  meta longtext,
+  created_at datetime NOT NULL,
+  updated_at datetime DEFAULT NULL,
+  PRIMARY KEY  (roll_up_id),
+  UNIQUE KEY uk_blog_day_month_year_product_type (blog_id, roll_up_day, roll_up_month, roll_up_year, local_product_name_id, type),
+  KEY idx_blog_id (blog_id),
+  KEY idx_type (type)
+) {$charset_collate};";
 
         dbDelta($sql);
     }
@@ -134,26 +134,26 @@ class TGS_Sync_Roll_Up_Database
         $charset_collate = $wpdb->get_charset_collate();
         $table_name = $wpdb->prefix . 'inventory_roll_up';
 
-        $sql = "CREATE TABLE $table_name (
-            id BIGINT NOT NULL AUTO_INCREMENT,
-            blog_id BIGINT,
-            local_product_name_id BIGINT NOT NULL,
-            global_product_name_id BIGINT,
-            roll_up_date DATE NOT NULL,
-            roll_up_day INT NOT NULL,
-            roll_up_month INT NOT NULL,
-            roll_up_year INT NOT NULL,
-            inventory_qty INT DEFAULT 0,
-            inventory_value DECIMAL(15,2) DEFAULT 0,
-            daily_cogs_value DECIMAL(15,2) DEFAULT 0,
-            meta JSON,
-            created_at DATETIME NOT NULL,
-            updated_at DATETIME,
-
-            PRIMARY KEY (id),
-            UNIQUE KEY uk_blog_day_month_year_product (blog_id, roll_up_day, roll_up_month, roll_up_year, local_product_name_id),
-            KEY idx_blog_id (blog_id)
-        ) $charset_collate;";
+        // dbDelta() format requirements
+        $sql = "CREATE TABLE {$table_name} (
+  id bigint(20) NOT NULL AUTO_INCREMENT,
+  blog_id bigint(20) DEFAULT NULL,
+  local_product_name_id bigint(20) NOT NULL,
+  global_product_name_id bigint(20) DEFAULT NULL,
+  roll_up_date date NOT NULL,
+  roll_up_day int(11) NOT NULL,
+  roll_up_month int(11) NOT NULL,
+  roll_up_year int(11) NOT NULL,
+  inventory_qty int(11) DEFAULT 0,
+  inventory_value decimal(15,2) DEFAULT 0,
+  daily_cogs_value decimal(15,2) DEFAULT 0,
+  meta longtext,
+  created_at datetime NOT NULL,
+  updated_at datetime DEFAULT NULL,
+  PRIMARY KEY  (id),
+  UNIQUE KEY uk_blog_day_month_year_product (blog_id, roll_up_day, roll_up_month, roll_up_year, local_product_name_id),
+  KEY idx_blog_id (blog_id)
+) {$charset_collate};";
 
         dbDelta($sql);
     }
@@ -171,23 +171,23 @@ class TGS_Sync_Roll_Up_Database
         $charset_collate = $wpdb->get_charset_collate();
         $table_name = $wpdb->prefix . 'order_roll_up';
 
-        $sql = "CREATE TABLE $table_name (
-            id BIGINT NOT NULL AUTO_INCREMENT,
-            blog_id BIGINT,
-            roll_up_date DATE NOT NULL,
-            roll_up_day INT NOT NULL,
-            roll_up_month INT NOT NULL,
-            roll_up_year INT NOT NULL,
-            count INT DEFAULT 0,
-            value DECIMAL(15,2) DEFAULT 0,
-            meta JSON,
-            created_at DATETIME NOT NULL,
-            updated_at DATETIME,
-
-            PRIMARY KEY (id),
-            UNIQUE KEY uk_blog_day_month_year (blog_id, roll_up_day, roll_up_month, roll_up_year),
-            KEY idx_blog_id (blog_id)
-        ) $charset_collate;";
+        // dbDelta() format requirements
+        $sql = "CREATE TABLE {$table_name} (
+  id bigint(20) NOT NULL AUTO_INCREMENT,
+  blog_id bigint(20) DEFAULT NULL,
+  roll_up_date date NOT NULL,
+  roll_up_day int(11) NOT NULL,
+  roll_up_month int(11) NOT NULL,
+  roll_up_year int(11) NOT NULL,
+  count int(11) DEFAULT 0,
+  value decimal(15,2) DEFAULT 0,
+  meta longtext,
+  created_at datetime NOT NULL,
+  updated_at datetime DEFAULT NULL,
+  PRIMARY KEY  (id),
+  UNIQUE KEY uk_blog_day_month_year (blog_id, roll_up_day, roll_up_month, roll_up_year),
+  KEY idx_blog_id (blog_id)
+) {$charset_collate};";
 
         dbDelta($sql);
     }
@@ -205,23 +205,27 @@ class TGS_Sync_Roll_Up_Database
         $charset_collate = $wpdb->get_charset_collate();
         $table_name = $wpdb->prefix . 'accounting_roll_up';
 
-        $sql = "CREATE TABLE $table_name (
-            roll_up_id BIGINT NOT NULL AUTO_INCREMENT,
-            blog_id BIGINT,
-            roll_up_date DATE NOT NULL,
-            roll_up_day INT NOT NULL,
-            roll_up_month INT NOT NULL,
-            roll_up_year INT NOT NULL,
-            total_income DECIMAL(15,2) DEFAULT 0.00,
-            total_expense DECIMAL(15,2) DEFAULT 0.00,
-            meta JSON,
-            created_at DATETIME NOT NULL,
-            updated_at DATETIME,
-
-            PRIMARY KEY (roll_up_id),
-            UNIQUE KEY uk_blog_day_month_year (blog_id, roll_up_day, roll_up_month, roll_up_year),
-            KEY idx_blog_id (blog_id)
-        ) $charset_collate;";
+        // dbDelta() yêu cầu format cực kỳ chặt chẽ:
+        // - 2 spaces (không phải tab) sau PRIMARY KEY
+        // - 2 spaces sau KEY name
+        // - Phải có space sau dấu phẩy trong column list
+        // - Không dùng JSON, dùng LONGTEXT thay thế
+        $sql = "CREATE TABLE {$table_name} (
+  roll_up_id bigint(20) NOT NULL AUTO_INCREMENT,
+  blog_id bigint(20) DEFAULT NULL,
+  roll_up_date date NOT NULL,
+  roll_up_day int(11) NOT NULL,
+  roll_up_month int(11) NOT NULL,
+  roll_up_year int(11) NOT NULL,
+  total_income decimal(15,2) DEFAULT 0.00,
+  total_expense decimal(15,2) DEFAULT 0.00,
+  meta longtext,
+  created_at datetime NOT NULL,
+  updated_at datetime DEFAULT NULL,
+  PRIMARY KEY  (roll_up_id),
+  UNIQUE KEY uk_blog_day_month_year (blog_id, roll_up_day, roll_up_month, roll_up_year),
+  KEY idx_blog_id (blog_id)
+) {$charset_collate};";
 
         dbDelta($sql);
     }
