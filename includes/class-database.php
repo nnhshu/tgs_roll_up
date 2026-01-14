@@ -249,15 +249,11 @@ class TGS_Sync_Roll_Up_Database
     }
 
     /**
-     * Get config for current blog
+     * Kiểm tra và tạo các bảng nếu chưa tồn tại
      */
-    public function get_config($blog_id = null)
+    public function ensure_tables_exist()
     {
         global $wpdb;
-
-        if ($blog_id === null) {
-            $blog_id = get_current_blog_id();
-        }
 
         // Check if config table exists
         $config_table_exists = $wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $this->config_table));
@@ -282,7 +278,17 @@ class TGS_Sync_Roll_Up_Database
         if (!$config_table_exists || !$roll_up_table_exists || !$inventory_roll_up_table_exists || !$order_roll_up_table_exists || !$accounting_roll_up_table_exists) {
             self::create_tables();
         }
+    }
 
+    /**
+     * Get config for current blog
+     */
+    public function get_config($blog_id = null)
+    {
+        global $wpdb;
+        if ($blog_id === null) {
+            $blog_id = get_current_blog_id();
+        }
 
         $config = $wpdb->get_row(
             $wpdb->prepare(
