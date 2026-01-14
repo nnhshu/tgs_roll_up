@@ -126,7 +126,13 @@ class CalculateDailyProductRollup
                     'tax' => 0,
                     'quantity' => 0,
                     'lot_ids' => [],
+                    'ledger_ids' => [],
                 ];
+            }
+
+            // Lưu ledger_id
+            if (!empty($item['local_ledger_id'])) {
+                $roll_up_data[$key]['ledger_ids'][] = intval($item['local_ledger_id']);
             }
 
             // Tính toán từ các trường thực tế trong local_ledger_item
@@ -159,6 +165,7 @@ class CalculateDailyProductRollup
         $saved_ids = [];
         foreach ($roll_up_data as $data) {
             $data['lot_ids'] = array_unique($data['lot_ids']);
+            $data['ledger_ids'] = array_unique($data['ledger_ids']);
 
             $roll_up_id = $this->rollUpRepo->save($data, false);
             if ($roll_up_id) {

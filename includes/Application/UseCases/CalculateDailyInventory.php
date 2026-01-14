@@ -151,6 +151,8 @@ class CalculateDailyInventory
                         'global_product_name_id' => $item['global_product_name_id'] ?? null,
                         'qty' => 0,
                         'value' => 0,
+                        'import_ledger_ids' => [],
+                        'export_ledger_ids' => [],
                     ];
                 }
 
@@ -158,11 +160,13 @@ class CalculateDailyInventory
                 if ($ledgerType === TGS_LEDGER_TYPE_IMPORT_ROLL_UP) {
                     $dailyInventory[$productId]['qty'] += $quantity;
                     $dailyInventory[$productId]['value'] += $value;
+                    $dailyInventory[$productId]['import_ledger_ids'][] = $ledgerId;
                 }
                 // Type 2 = Export (-) hoặc Type 6 = Damage (-)
                 elseif ($ledgerType === TGS_LEDGER_TYPE_EXPORT_ROLL_UP || $ledgerType === TGS_LEDGER_TYPE_DAMAGE_ROLL_UP) {
                     $dailyInventory[$productId]['qty'] -= $quantity;
                     $dailyInventory[$productId]['value'] -= $value;
+                    $dailyInventory[$productId]['export_ledger_ids'][] = $ledgerId;
                 }
             }
         }
@@ -170,28 +174,38 @@ class CalculateDailyInventory
         // Save daily inventory (sử dụng INSERT ... ON DUPLICATE KEY UPDATE)
         $savedCount = 0;
         foreach ($dailyInventory as $productId => $data) {
+            // Unique ledger IDs và tạo meta JSON
+            $importLedgerIds = array_unique($data['import_ledger_ids']);
+            $exportLedgerIds = array_unique($data['export_ledger_ids']);
+            $metaJson = json_encode([
+                'import_ledger_ids' => $importLedgerIds,
+                'export_ledger_ids' => $exportLedgerIds,
+            ]);
+
             $this->wpdb->query($this->wpdb->prepare(
                 "INSERT INTO {$inventoryTable}
                 (blog_id, local_product_name_id, global_product_name_id,
                  roll_up_date, roll_up_day, roll_up_month, roll_up_year,
-                 inventory_qty, inventory_value, created_at, updated_at)
-                VALUES (%d, %d, %d, %s, %d, %d, %d, %f, %f, %s, %s)
+                 inventory_qty, inventory_value, meta, created_at, updated_at)
+                VALUES (%d, %d, %d, %s, %d, %d, %d, %f, %f, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
                     inventory_qty = inventory_qty + VALUES(inventory_qty),
                     inventory_value = inventory_value + VALUES(inventory_value),
+                    meta = JSON_MERGE_PRESERVE(COALESCE(meta, '{}'), VALUES(meta)),
                     updated_at = VALUES(updated_at)",
                 $blogId,
                 $productId,
                 $data['global_product_name_id'],
                 $date,
-                    $day,
-                    $month,
-                    $year,
-                    $data['qty'],
-                    $data['value'],
-                    current_time('mysql'),
-                    current_time('mysql')
-                ));
+                $day,
+                $month,
+                $year,
+                $data['qty'],
+                $data['value'],
+                $metaJson,
+                current_time('mysql'),
+                current_time('mysql')
+            ));
 
             $savedCount++;
         }

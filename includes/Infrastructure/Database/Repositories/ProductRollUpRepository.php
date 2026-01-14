@@ -71,9 +71,16 @@ class ProductRollUpRepository implements RollUpRepositoryInterface
         $insert_data['roll_up_month'] = intval($date_parts[1]);
         $insert_data['roll_up_day'] = intval($date_parts[2]);
 
-        // Meta (lot_ids)
+        // Meta (lot_ids và ledger_ids)
+        $meta = [];
         if (!empty($data['lot_ids']) && is_array($data['lot_ids'])) {
-            $insert_data['meta'] = json_encode(['lot_ids' => $data['lot_ids']]);
+            $meta['lot_ids'] = $data['lot_ids'];
+        }
+        if (!empty($data['ledger_ids']) && is_array($data['ledger_ids'])) {
+            $meta['ledger_ids'] = $data['ledger_ids'];
+        }
+        if (!empty($meta)) {
+            $insert_data['meta'] = json_encode($meta);
         }
 
         // ON DUPLICATE KEY UPDATE
@@ -86,6 +93,7 @@ class ProductRollUpRepository implements RollUpRepositoryInterface
             : "amount_after_tax = amount_after_tax + VALUES(amount_after_tax),
                tax = tax + VALUES(tax),
                quantity = quantity + VALUES(quantity),
+               meta = JSON_MERGE_PRESERVE(COALESCE(meta, '{}'), VALUES(meta)),
                updated_at = VALUES(updated_at)";
 
         // Build query

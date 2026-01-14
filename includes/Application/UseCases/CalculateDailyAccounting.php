@@ -107,19 +107,30 @@ class CalculateDailyAccounting
         // Tính tổng thu chi
         $totalIncome = 0;
         $totalExpense = 0;
+        $incomeLedgerIds = [];
+        $expenseLedgerIds = [];
 
         foreach ($ledgers as $ledger) {
             $ledgerType = intval($ledger['local_ledger_type']);
+            $ledgerId = $ledger['local_ledger_id'];
             $amount = floatval($ledger['local_ledger_total_amount'] ?? 0);
 
             if ($ledgerType === TGS_LEDGER_TYPE_RECEIPT_ROLL_UP) {
                 // Type 7 = Thu
                 $totalIncome += $amount;
+                $incomeLedgerIds[] = $ledgerId;
             } elseif ($ledgerType === TGS_LEDGER_TYPE_PAYMENT_ROLL_UP) {
                 // Type 8 = Chi
                 $totalExpense += $amount;
+                $expenseLedgerIds[] = $ledgerId;
             }
         }
+
+        // Tạo meta JSON
+        $metaJson = json_encode([
+            'income_ledger_ids' => $incomeLedgerIds,
+            'expense_ledger_ids' => $expenseLedgerIds,
+        ]);
 
         // Save accounting roll-up using INSERT ... ON DUPLICATE KEY UPDATE để cộng dồn
         $createdAt = current_time('mysql');
@@ -127,11 +138,12 @@ class CalculateDailyAccounting
 
         $this->wpdb->query($this->wpdb->prepare(
             "INSERT INTO {$accountingTable}
-            (blog_id, roll_up_date, roll_up_day, roll_up_month, roll_up_year, total_income, total_expense, created_at, updated_at)
-            VALUES (%d, %s, %d, %d, %d, %f, %f, %s, %s)
+            (blog_id, roll_up_date, roll_up_day, roll_up_month, roll_up_year, total_income, total_expense, meta, created_at, updated_at)
+            VALUES (%d, %s, %d, %d, %d, %f, %f, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 total_income = total_income + VALUES(total_income),
                 total_expense = total_expense + VALUES(total_expense),
+                meta = JSON_MERGE_PRESERVE(COALESCE(meta, '{}'), VALUES(meta)),
                 updated_at = VALUES(updated_at)",
             $blogId,
             $date,
@@ -140,6 +152,7 @@ class CalculateDailyAccounting
             $year,
             $totalIncome,
             $totalExpense,
+            $metaJson,
             $createdAt,
             $updatedAt
         ));
