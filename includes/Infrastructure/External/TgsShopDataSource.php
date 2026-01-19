@@ -115,10 +115,15 @@ class TgsShopDataSource implements DataSourceInterface
             return [];
         }
 
-        $table = TGS_TABLE_LOCAL_LEDGER_ITEM;
+        $itemTable = TGS_TABLE_LOCAL_LEDGER_ITEM;
+        $ledgerTable = TGS_TABLE_LOCAL_LEDGER;
         $placeholders = implode(',', array_fill(0, count($allItemIds), '%d'));
 
-        $query = "SELECT * FROM {$table} WHERE local_ledger_item_id IN ({$placeholders})";
+        // JOIN với local_ledger để lấy local_ledger_source
+        $query = "SELECT i.*, l.local_ledger_source
+                  FROM {$itemTable} i
+                  LEFT JOIN {$ledgerTable} l ON i.local_ledger_id = l.local_ledger_id
+                  WHERE i.local_ledger_item_id IN ({$placeholders})";
 
         return $this->wpdb->get_results(
             $this->wpdb->prepare($query, ...$allItemIds),

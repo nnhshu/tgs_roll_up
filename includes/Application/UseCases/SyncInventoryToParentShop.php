@@ -117,6 +117,7 @@ class SyncInventoryToParentShop
                     'out_value' => $record['out_value'],
                     'end_qty' => $record['end_qty'],
                     'end_value' => $record['end_value'],
+                    'daily_cogs_value' => $record['daily_cogs_value'],
                 ];
 
                 // Sync meta

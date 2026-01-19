@@ -153,10 +153,14 @@ class CalculateDailyInventory
                         'in_value' => 0,
                         'out_qty' => 0,
                         'out_value' => 0,
+                        'daily_cogs_value' => 0,
                         'import_ledger_ids' => [],
                         'export_ledger_ids' => [],
                     ];
                 }
+
+                // Lưu giá sản phẩm mới nhất (ghi đè)
+                $dailyInventory[$productId]['daily_cogs_value'] = $price;
 
                 // Type 1 = Import (+)
                 if ($ledgerType === TGS_LEDGER_TYPE_IMPORT_ROLL_UP) {
@@ -194,9 +198,9 @@ class CalculateDailyInventory
                 "INSERT INTO {$inventoryTable}
                 (blog_id, local_product_name_id, global_product_name_id,
                  roll_up_date, roll_up_day, roll_up_month, roll_up_year,
-                 in_qty, in_value, out_qty, out_value, end_qty, end_value,
+                 in_qty, in_value, out_qty, out_value, end_qty, end_value, daily_cogs_value,
                  meta, created_at, updated_at)
-                VALUES (%d, %d, %d, %s, %d, %d, %d, %f, %f, %f, %f, %f, %f, %s, %s, %s)
+                VALUES (%d, %d, %d, %s, %d, %d, %d, %f, %f, %f, %f, %f, %f, %f, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
                     in_qty = in_qty + VALUES(in_qty),
                     in_value = in_value + VALUES(in_value),
@@ -204,6 +208,7 @@ class CalculateDailyInventory
                     out_value = out_value + VALUES(out_value),
                     end_qty = end_qty + VALUES(end_qty),
                     end_value = end_value + VALUES(end_value),
+                    daily_cogs_value = VALUES(daily_cogs_value),
                     meta = JSON_MERGE_PRESERVE(COALESCE(meta, '{}'), VALUES(meta)),
                     updated_at = VALUES(updated_at)",
                 $blogId,
@@ -219,6 +224,7 @@ class CalculateDailyInventory
                 $data['out_value'],
                 $endQty,
                 $endValue,
+                $data['daily_cogs_value'],
                 $metaJson,
                 current_time('mysql'),
                 current_time('mysql')
@@ -300,9 +306,9 @@ class CalculateDailyInventory
                 "INSERT INTO {$inventoryTable}
                 (blog_id, local_product_name_id, global_product_name_id,
                  roll_up_date, roll_up_day, roll_up_month, roll_up_year,
-                 in_qty, in_value, out_qty, out_value, end_qty, end_value,
+                 in_qty, in_value, out_qty, out_value, end_qty, end_value, daily_cogs_value,
                  meta, created_at, updated_at)
-                VALUES (%d, %d, %d, %s, %d, %d, %d, %f, %f, %f, %f, %f, %f, %s, %s, %s)
+                VALUES (%d, %d, %d, %s, %d, %d, %d, %f, %f, %f, %f, %f, %f, %f, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
                     in_qty = VALUES(in_qty),
                     in_value = VALUES(in_value),
@@ -310,6 +316,7 @@ class CalculateDailyInventory
                     out_value = VALUES(out_value),
                     end_qty = VALUES(end_qty),
                     end_value = VALUES(end_value),
+                    daily_cogs_value = VALUES(daily_cogs_value),
                     updated_at = VALUES(updated_at)",
                 $blogId,
                 $record['local_product_name_id'],
@@ -324,6 +331,7 @@ class CalculateDailyInventory
                 0, // out_value = 0
                 $record['end_qty'], // end_qty = tồn cuối ngày hôm trước
                 $record['end_value'], // end_value = giá trị tồn cuối ngày hôm trước
+                $record['daily_cogs_value'] ?? 0, // daily_cogs_value = giá gốc của ngày hôm trước
                 $record['meta'],
                 current_time('mysql'),
                 current_time('mysql')

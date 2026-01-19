@@ -61,6 +61,7 @@ class ProductRollUpRepository implements RollUpRepositoryInterface
             'tax' => $data['tax'] ?? 0,
             'quantity' => $data['quantity'] ?? 0,
             'type' => $data['type'] ?? 0,
+            'source' => $data['source'] ?? 0,
             'created_at' => current_time('mysql'),
             'updated_at' => current_time('mysql'),
         ];

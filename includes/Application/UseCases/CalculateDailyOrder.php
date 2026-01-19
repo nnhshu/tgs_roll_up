@@ -96,45 +96,60 @@ class CalculateDailyOrder
 
         $orderRollUpTable = $this->wpdb->prefix . 'order_roll_up';
 
-        // Calculate daily order statistics
-        $orderCount = count($orders);
-        $orderValue = 0;
-        $ledgerIds = [];
+        // Group orders by source
+        $ordersBySource = [];
 
         foreach ($orders as $order) {
-            $orderValue += floatval($order['local_ledger_total_amount']);
-            $ledgerIds[] = $order['local_ledger_id'];
+            $source = isset($order['local_ledger_source']) ? intval($order['local_ledger_source']) : 0;
+
+            if (!isset($ordersBySource[$source])) {
+                $ordersBySource[$source] = [
+                    'count' => 0,
+                    'value' => 0,
+                    'ledger_ids' => [],
+                ];
+            }
+
+            $ordersBySource[$source]['count']++;
+            $ordersBySource[$source]['value'] += floatval($order['local_ledger_total_amount']);
+            $ordersBySource[$source]['ledger_ids'][] = $order['local_ledger_id'];
         }
 
-        // Save daily order roll-up using INSERT ... ON DUPLICATE KEY UPDATE để cộng dồn
-        $metaJson = json_encode(['ledger_ids' => $ledgerIds]);
-        $createdAt = current_time('mysql');
-        $updatedAt = current_time('mysql');
+        // Save daily order roll-up for each source
+        $allLedgerIds = [];
+        foreach ($ordersBySource as $source => $data) {
+            $metaJson = json_encode(['ledger_ids' => $data['ledger_ids']]);
+            $createdAt = current_time('mysql');
+            $updatedAt = current_time('mysql');
 
-        $this->wpdb->query($this->wpdb->prepare(
-            "INSERT INTO {$orderRollUpTable}
-            (blog_id, roll_up_date, roll_up_day, roll_up_month, roll_up_year, count, value, meta, created_at, updated_at)
-            VALUES (%d, %s, %d, %d, %d, %d, %f, %s, %s, %s)
-            ON DUPLICATE KEY UPDATE
-                count = count + VALUES(count),
-                value = value + VALUES(value),
-                meta = JSON_MERGE_PRESERVE(COALESCE(meta, '{}'), VALUES(meta)),
-                updated_at = VALUES(updated_at)",
-            $blogId,
-            $date,
-            $day,
-            $month,
-            $year,
-            $orderCount,
-            $orderValue,
-            $metaJson,
-            $createdAt,
-            $updatedAt
-        ));
+            $this->wpdb->query($this->wpdb->prepare(
+                "INSERT INTO {$orderRollUpTable}
+                (blog_id, roll_up_date, roll_up_day, roll_up_month, roll_up_year, count, value, source, meta, created_at, updated_at)
+                VALUES (%d, %s, %d, %d, %d, %d, %f, %d, %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    count = count + VALUES(count),
+                    value = value + VALUES(value),
+                    meta = JSON_MERGE_PRESERVE(COALESCE(meta, '{}'), VALUES(meta)),
+                    updated_at = VALUES(updated_at)",
+                $blogId,
+                $date,
+                $day,
+                $month,
+                $year,
+                $data['count'],
+                $data['value'],
+                $source,
+                $metaJson,
+                $createdAt,
+                $updatedAt
+            ));
+
+            $allLedgerIds = array_merge($allLedgerIds, $data['ledger_ids']);
+        }
 
         return [
-            'daily' => $orderCount,
-            'ledger_ids' => $ledgerIds,
+            'daily' => count($orders),
+            'ledger_ids' => $allLedgerIds,
         ];
     }
 }
