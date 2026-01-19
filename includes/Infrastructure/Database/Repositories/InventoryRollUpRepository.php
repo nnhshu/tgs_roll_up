@@ -44,8 +44,12 @@ class InventoryRollUpRepository
             'local_product_name_id' => $data['local_product_name_id'] ?? 0,
             'global_product_name_id' => $data['global_product_name_id'] ?? null,
             'roll_up_date' => $data['roll_up_date'] ?? current_time('Y-m-d'),
-            'inventory_qty' => $data['inventory_qty'] ?? 0,
-            'inventory_value' => $data['inventory_value'] ?? 0,
+            'in_qty' => $data['in_qty'] ?? 0,
+            'in_value' => $data['in_value'] ?? 0,
+            'out_qty' => $data['out_qty'] ?? 0,
+            'out_value' => $data['out_value'] ?? 0,
+            'end_qty' => $data['end_qty'] ?? 0,
+            'end_value' => $data['end_value'] ?? 0,
             'created_at' => current_time('mysql'),
             'updated_at' => current_time('mysql'),
         ];
@@ -63,12 +67,20 @@ class InventoryRollUpRepository
 
         // ON DUPLICATE KEY UPDATE
         $on_duplicate = $overwrite
-            ? "inventory_qty = VALUES(inventory_qty),
-               inventory_value = VALUES(inventory_value),
+            ? "in_qty = VALUES(in_qty),
+               in_value = VALUES(in_value),
+               out_qty = VALUES(out_qty),
+               out_value = VALUES(out_value),
+               end_qty = VALUES(end_qty),
+               end_value = VALUES(end_value),
                meta = VALUES(meta),
                updated_at = VALUES(updated_at)"
-            : "inventory_qty = inventory_qty + VALUES(inventory_qty),
-               inventory_value = inventory_value + VALUES(inventory_value),
+            : "in_qty = in_qty + VALUES(in_qty),
+               in_value = in_value + VALUES(in_value),
+               out_qty = out_qty + VALUES(out_qty),
+               out_value = out_value + VALUES(out_value),
+               end_qty = end_qty + VALUES(end_qty),
+               end_value = end_value + VALUES(end_value),
                updated_at = VALUES(updated_at)";
 
         // Build query

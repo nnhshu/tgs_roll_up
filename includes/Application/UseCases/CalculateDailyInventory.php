@@ -149,8 +149,10 @@ class CalculateDailyInventory
                 if (!isset($dailyInventory[$productId])) {
                     $dailyInventory[$productId] = [
                         'global_product_name_id' => $item['global_product_name_id'] ?? null,
-                        'qty' => 0,
-                        'value' => 0,
+                        'in_qty' => 0,
+                        'in_value' => 0,
+                        'out_qty' => 0,
+                        'out_value' => 0,
                         'import_ledger_ids' => [],
                         'export_ledger_ids' => [],
                     ];
@@ -158,14 +160,14 @@ class CalculateDailyInventory
 
                 // Type 1 = Import (+)
                 if ($ledgerType === TGS_LEDGER_TYPE_IMPORT_ROLL_UP) {
-                    $dailyInventory[$productId]['qty'] += $quantity;
-                    $dailyInventory[$productId]['value'] += $value;
+                    $dailyInventory[$productId]['in_qty'] += $quantity;
+                    $dailyInventory[$productId]['in_value'] += $value;
                     $dailyInventory[$productId]['import_ledger_ids'][] = $ledgerId;
                 }
                 // Type 2 = Export (-) hoặc Type 6 = Damage (-)
                 elseif ($ledgerType === TGS_LEDGER_TYPE_EXPORT_ROLL_UP || $ledgerType === TGS_LEDGER_TYPE_DAMAGE_ROLL_UP) {
-                    $dailyInventory[$productId]['qty'] -= $quantity;
-                    $dailyInventory[$productId]['value'] -= $value;
+                    $dailyInventory[$productId]['out_qty'] += $quantity;
+                    $dailyInventory[$productId]['out_value'] += $value;
                     $dailyInventory[$productId]['export_ledger_ids'][] = $ledgerId;
                 }
             }
@@ -182,15 +184,26 @@ class CalculateDailyInventory
                 'export_ledger_ids' => $exportLedgerIds,
             ]);
 
+            // Tính end_qty và end_value từ in và out
+            // end_qty = in_qty - out_qty
+            // end_value = in_value - out_value
+            $endQty = $data['in_qty'] - $data['out_qty'];
+            $endValue = $data['in_value'] - $data['out_value'];
+
             $this->wpdb->query($this->wpdb->prepare(
                 "INSERT INTO {$inventoryTable}
                 (blog_id, local_product_name_id, global_product_name_id,
                  roll_up_date, roll_up_day, roll_up_month, roll_up_year,
-                 inventory_qty, inventory_value, meta, created_at, updated_at)
-                VALUES (%d, %d, %d, %s, %d, %d, %d, %f, %f, %s, %s, %s)
+                 in_qty, in_value, out_qty, out_value, end_qty, end_value,
+                 meta, created_at, updated_at)
+                VALUES (%d, %d, %d, %s, %d, %d, %d, %f, %f, %f, %f, %f, %f, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
-                    inventory_qty = inventory_qty + VALUES(inventory_qty),
-                    inventory_value = inventory_value + VALUES(inventory_value),
+                    in_qty = in_qty + VALUES(in_qty),
+                    in_value = in_value + VALUES(in_value),
+                    out_qty = out_qty + VALUES(out_qty),
+                    out_value = out_value + VALUES(out_value),
+                    end_qty = end_qty + VALUES(end_qty),
+                    end_value = end_value + VALUES(end_value),
                     meta = JSON_MERGE_PRESERVE(COALESCE(meta, '{}'), VALUES(meta)),
                     updated_at = VALUES(updated_at)",
                 $blogId,
@@ -200,8 +213,12 @@ class CalculateDailyInventory
                 $day,
                 $month,
                 $year,
-                $data['qty'],
-                $data['value'],
+                $data['in_qty'],
+                $data['in_value'],
+                $data['out_qty'],
+                $data['out_value'],
+                $endQty,
+                $endValue,
                 $metaJson,
                 current_time('mysql'),
                 current_time('mysql')
@@ -277,16 +294,22 @@ class CalculateDailyInventory
         }
 
         // Duplicate từng product từ ngày hôm trước sang ngày hôm nay
+        // Copy end_qty và end_value của ngày hôm trước làm điểm bắt đầu cho ngày hôm nay
         foreach ($yesterdayInventory as $record) {
             $this->wpdb->query($this->wpdb->prepare(
                 "INSERT INTO {$inventoryTable}
                 (blog_id, local_product_name_id, global_product_name_id,
                  roll_up_date, roll_up_day, roll_up_month, roll_up_year,
-                 inventory_qty, inventory_value, meta, created_at, updated_at)
-                VALUES (%d, %d, %d, %s, %d, %d, %d, %f, %f, %s, %s, %s)
+                 in_qty, in_value, out_qty, out_value, end_qty, end_value,
+                 meta, created_at, updated_at)
+                VALUES (%d, %d, %d, %s, %d, %d, %d, %f, %f, %f, %f, %f, %f, %s, %s, %s)
                 ON DUPLICATE KEY UPDATE
-                    inventory_qty = VALUES(inventory_qty),
-                    inventory_value = VALUES(inventory_value),
+                    in_qty = VALUES(in_qty),
+                    in_value = VALUES(in_value),
+                    out_qty = VALUES(out_qty),
+                    out_value = VALUES(out_value),
+                    end_qty = VALUES(end_qty),
+                    end_value = VALUES(end_value),
                     updated_at = VALUES(updated_at)",
                 $blogId,
                 $record['local_product_name_id'],
@@ -295,8 +318,12 @@ class CalculateDailyInventory
                 $day,
                 $month,
                 $year,
-                $record['inventory_qty'],
-                $record['inventory_value'],
+                0, // in_qty = 0 (chưa có nhập trong ngày mới)
+                0, // in_value = 0
+                0, // out_qty = 0 (chưa có xuất trong ngày mới)
+                0, // out_value = 0
+                $record['end_qty'], // end_qty = tồn cuối ngày hôm trước
+                $record['end_value'], // end_value = giá trị tồn cuối ngày hôm trước
                 $record['meta'],
                 current_time('mysql'),
                 current_time('mysql')

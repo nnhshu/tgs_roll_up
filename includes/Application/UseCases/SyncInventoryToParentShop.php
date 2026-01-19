@@ -111,8 +111,12 @@ class SyncInventoryToParentShop
                     'global_product_name_id' => $record['global_product_name_id'],
                     'roll_up_date' => $record['roll_up_date'],
                     'roll_up_day' => $record['roll_up_day'],  // Giữ nguyên roll_up_day (có thể là 0 hoặc ngày cụ thể)
-                    'inventory_qty' => $record['inventory_qty'],
-                    'inventory_value' => $record['inventory_value'],
+                    'in_qty' => $record['in_qty'],
+                    'in_value' => $record['in_value'],
+                    'out_qty' => $record['out_qty'],
+                    'out_value' => $record['out_value'],
+                    'end_qty' => $record['end_qty'],
+                    'end_value' => $record['end_value'],
                 ];
 
                 // Sync meta
