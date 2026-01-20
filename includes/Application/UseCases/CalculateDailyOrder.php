@@ -118,31 +118,78 @@ class CalculateDailyOrder
         // Save daily order roll-up for each source
         $allLedgerIds = [];
         foreach ($ordersBySource as $source => $data) {
+            // Check xem đã có record chưa (có thể parent đã được roll-up trước đó)
+            $existing = $this->wpdb->get_row($this->wpdb->prepare(
+                "SELECT count, value, meta FROM {$orderRollUpTable}
+                 WHERE blog_id = %d AND roll_up_date = %s AND source = %d",
+                $blogId, $date, $source
+            ), ARRAY_A);
+
             $metaJson = json_encode(['ledger_ids' => $data['ledger_ids']]);
             $createdAt = current_time('mysql');
             $updatedAt = current_time('mysql');
 
-            $this->wpdb->query($this->wpdb->prepare(
-                "INSERT INTO {$orderRollUpTable}
-                (blog_id, roll_up_date, roll_up_day, roll_up_month, roll_up_year, count, value, source, meta, created_at, updated_at)
-                VALUES (%d, %s, %d, %d, %d, %d, %f, %d, %s, %s, %s)
-                ON DUPLICATE KEY UPDATE
-                    count = count + VALUES(count),
-                    value = value + VALUES(value),
-                    meta = JSON_MERGE_PRESERVE(COALESCE(meta, '{}'), VALUES(meta)),
-                    updated_at = VALUES(updated_at)",
-                $blogId,
-                $date,
-                $day,
-                $month,
-                $year,
-                $data['count'],
-                $data['value'],
-                $source,
-                $metaJson,
-                $createdAt,
-                $updatedAt
-            ));
+            if ($existing) {
+                // Đã có record, check xem parent đã được roll-up chưa
+                $existingMeta = json_decode($existing['meta'], true);
+                $existingLedgerIds = isset($existingMeta['ledger_ids']) ? $existingMeta['ledger_ids'] : [];
+                
+                // Lọc ra các ledger_id mới (chưa có trong existing)
+                $newLedgerIds = array_diff($data['ledger_ids'], $existingLedgerIds);
+                
+                if (empty($newLedgerIds)) {
+                    // Tất cả đã được roll-up rồi, không cần update
+                    $allLedgerIds = array_merge($allLedgerIds, $data['ledger_ids']);
+                    continue;
+                }
+                
+                // Chỉ cộng các order mới
+                $newCount = count($newLedgerIds);
+                $newValue = 0;
+                foreach ($orders as $order) {
+                    if (in_array($order['local_ledger_id'], $newLedgerIds)) {
+                        $newValue += floatval($order['local_ledger_total_amount']);
+                    }
+                }
+                
+                // Merge ledger_ids
+                $mergedLedgerIds = array_unique(array_merge($existingLedgerIds, $newLedgerIds));
+                $mergedMetaJson = json_encode(['ledger_ids' => array_values($mergedLedgerIds)]);
+                
+                $this->wpdb->query($this->wpdb->prepare(
+                    "UPDATE {$orderRollUpTable}
+                     SET count = count + %d,
+                         value = value + %f,
+                         meta = %s,
+                         updated_at = %s
+                     WHERE blog_id = %d AND roll_up_date = %s AND source = %d",
+                    $newCount,
+                    $newValue,
+                    $mergedMetaJson,
+                    $updatedAt,
+                    $blogId,
+                    $date,
+                    $source
+                ));
+            } else {
+                // Chưa có record, insert mới
+                $this->wpdb->query($this->wpdb->prepare(
+                    "INSERT INTO {$orderRollUpTable}
+                    (blog_id, roll_up_date, roll_up_day, roll_up_month, roll_up_year, count, value, source, meta, created_at, updated_at)
+                    VALUES (%d, %s, %d, %d, %d, %d, %f, %d, %s, %s, %s)",
+                    $blogId,
+                    $date,
+                    $day,
+                    $month,
+                    $year,
+                    $data['count'],
+                    $data['value'],
+                    $source,
+                    $metaJson,
+                    $createdAt,
+                    $updatedAt
+                ));
+            }
 
             $allLedgerIds = array_merge($allLedgerIds, $data['ledger_ids']);
         }

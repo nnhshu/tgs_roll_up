@@ -120,18 +120,21 @@ class CalculateDailyProductRollup
             }
         }
         
-        // Query tất cả parent một lần để tối ưu
+        // Query tất cả parent một lần để tối ưu (lấy cả type và source)
         $parentMap = [];
         if (!empty($parentIds)) {
             $parentIds = array_unique($parentIds);
             $placeholders = implode(',', array_fill(0, count($parentIds), '%d'));
             $parentResults = $wpdb->get_results($wpdb->prepare(
-                "SELECT local_ledger_id, local_ledger_type FROM " . TGS_TABLE_LOCAL_LEDGER . " WHERE local_ledger_id IN ({$placeholders})",
+                "SELECT local_ledger_id, local_ledger_type, local_ledger_source FROM " . TGS_TABLE_LOCAL_LEDGER . " WHERE local_ledger_id IN ({$placeholders})",
                 ...$parentIds
             ), ARRAY_A);
             
             foreach ($parentResults as $parent) {
-                $parentMap[intval($parent['local_ledger_id'])] = intval($parent['local_ledger_type']);
+                $parentMap[intval($parent['local_ledger_id'])] = [
+                    'type' => intval($parent['local_ledger_type']),
+                    'source' => isset($parent['local_ledger_source']) ? intval($parent['local_ledger_source']) : 0
+                ];
             }
         }
 
@@ -151,21 +154,22 @@ class CalculateDailyProductRollup
             $parent_id = isset($child_ledger['local_ledger_parent_id']) ? intval($child_ledger['local_ledger_parent_id']) : null;
             
             // Xác định roll-up type dựa vào parent type:
-            // - Type 1 (nhập) từ parent type 9 (mua) → PURCHASE_ROLL_UP (9)
-            // - Type 1 (nhập) từ parent type 11 (hoàn) → RETURN_ROLL_UP (11)
+            // - Type 1 (nhập) từ parent type 11 (hoàn) → RETURN_ROLL_UP (11) - CHỈ TÍNH HOÀN HÀNG
             // - Type 2 (xuất) từ parent type 10 (bán) → SALES_ROLL_UP (10)
             $ledger_type = null;
+            $source = 0;
             
             if ($parent_id && isset($parentMap[$parent_id])) {
-                $parent_type = $parentMap[$parent_id];
+                $parent_data = $parentMap[$parent_id];
+                $parent_type = $parent_data['type'];
+                $source = $parent_data['source']; // Lấy source từ parent ledger
                 
                 if ($child_type == 1) {
-                    // Nhập kho
-                    if ($parent_type == 9) {
-                        $ledger_type = TGS_LEDGER_TYPE_PURCHASE_ROLL_UP; // 9 - Mua hàng
-                    } elseif ($parent_type == 11) {
+                    // Nhập kho - CHỈ tính khi parent type = 11 (hoàn hàng)
+                    if ($parent_type == 11) {
                         $ledger_type = TGS_LEDGER_TYPE_RETURN_ROLL_UP; // 11 - Hoàn trả
                     }
+                    // Không tính parent type = 9 (mua hàng)
                 } elseif ($child_type == 2) {
                     // Xuất kho
                     if ($parent_type == 10) {
@@ -178,8 +182,6 @@ class CalculateDailyProductRollup
             if (!$ledger_type) {
                 continue;
             }
-            
-            $source = isset($item['local_ledger_source']) ? intval($item['local_ledger_source']) : 0;
             $key = $product_id . '_' . $ledger_type . '_' . $source;
 
             if (!isset($roll_up_data[$key])) {

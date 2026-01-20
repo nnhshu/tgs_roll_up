@@ -270,6 +270,8 @@ class TgsShopDataSource implements DataSourceInterface
         $table = TGS_TABLE_LOCAL_LEDGER;
 
         // Lấy phiếu bán (type 10) từ phiếu con (type 2 - xuất kho) đã approve hôm nay
+        // Lưu ý: Không check p.is_croned vì parent có thể đã được roll-up trước đó
+        // (khi chỉ parent approve), nhưng bây giờ child approve rồi nên cần roll-up lại
         $query = "SELECT DISTINCT p.*
                   FROM {$table} c
                   INNER JOIN {$table} p ON c.local_ledger_parent_id = p.local_ledger_id
@@ -281,7 +283,6 @@ class TgsShopDataSource implements DataSourceInterface
                   AND (c.is_deleted IS NULL OR c.is_deleted = 0)
                   AND (p.is_deleted IS NULL OR p.is_deleted = 0)
                   AND (c.is_croned IS NULL OR c.is_croned = 0)
-                  AND (p.is_croned IS NULL OR p.is_croned = 0)
                   ORDER BY p.local_ledger_id ASC";
 
         return $this->wpdb->get_results(
