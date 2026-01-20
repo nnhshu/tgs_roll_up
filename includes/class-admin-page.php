@@ -44,6 +44,26 @@ class TGS_Admin_Page
     private $calculateInventory;
 
     /**
+     * Database wrapper (backward compatibility)
+     */
+    private $database;
+
+    /**
+     * Sync manager wrapper (backward compatibility)
+     */
+    private $sync_manager;
+
+    /**
+     * Cron handler wrapper (backward compatibility)
+     */
+    private $cron_handler;
+
+    /**
+     * Calculator wrapper (backward compatibility)
+     */
+    private $calculator;
+
+    /**
      * Menu slug
      */
     const MENU_SLUG = 'tgs-sync-roll-up';
