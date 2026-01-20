@@ -146,18 +146,19 @@ class CronService
                 return;
             }
 
-            // BƯỚC 2: Phân loại ledgers theo type
+            // BƯỚC 2: Phân loại ledgers theo type (child types: 1, 2, 6, 7, 8)
             $ledgersByType = $this->groupLedgersByType($allLedgers);
 
             // BƯỚC 3: Tính toán roll-up cho từng loại
             $allLedgerIds = array_column($allLedgers, 'local_ledger_id');
 
-            // 3.1. Calculate product roll-up (type 10, 11)
-            if (!empty($ledgersByType[TGS_LEDGER_TYPE_SALES_ROLL_UP]) || !empty($ledgersByType[11])) {
-                $productLedgers = array_merge(
-                    $ledgersByType[TGS_LEDGER_TYPE_SALES_ROLL_UP] ?? [],
-                    $ledgersByType[11] ?? []
-                );
+            // 3.1. Calculate product roll-up (lấy type 1, 2 - nhập/xuất kho)
+            // CalculateDailyProductRollup sẽ tự xác định parent type để phân loại
+            $productLedgers = array_merge(
+                $ledgersByType[TGS_LEDGER_TYPE_IMPORT_ROLL_UP] ?? [],
+                $ledgersByType[TGS_LEDGER_TYPE_EXPORT_ROLL_UP] ?? []
+            );
+            if (!empty($productLedgers)) {
                 $this->calculateRollUp->executeWithLedgers($blogId, $date, $productLedgers);
             }
 
@@ -173,9 +174,12 @@ class CronService
                 $this->calculateInventory->executeWithLedgers($blogId, $date, $inventoryLedgers);
             }
 
-            // 3.3. Calculate orders (type 10)
-            if (!empty($ledgersByType[TGS_LEDGER_TYPE_SALES_ROLL_UP])) {
-                $this->calculateOrder->executeWithLedgers($blogId, $date, $ledgersByType[TGS_LEDGER_TYPE_SALES_ROLL_UP]);
+            // 3.3. Calculate orders (lấy parent type 10 từ child type 2 đã approve)
+            // getOrders() đã được sửa để lấy parent type 10 từ child type 2 đã approve
+            // Chỉ roll-up khi cả parent (type=10) VÀ child (type=2) đều đã approve
+            $todayOrders = $this->dataSource->getOrders($date);
+            if (!empty($todayOrders)) {
+                $this->calculateOrder->executeWithLedgers($blogId, $date, $todayOrders);
             }
 
             // 3.4. Calculate accounting (type 7, 8)

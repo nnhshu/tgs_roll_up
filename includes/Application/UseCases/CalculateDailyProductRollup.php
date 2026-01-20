@@ -99,19 +99,86 @@ class CalculateDailyProductRollup
      */
     private function processLedgers(int $blogId, string $date, array $ledgers): array
     {
+        global $wpdb;
+        
         $ledger_ids = array_column($ledgers, 'local_ledger_id');
 
         // Truyền toàn bộ ledgers thay vì chỉ ledger_ids để lấy item IDs từ JSON
         $items = $this->dataSource->getLedgerItems($ledgers);
 
+        // Tạo map ledger_id => ledger để lấy parent_id và type
+        $ledgerMap = [];
+        $parentIds = [];
+        foreach ($ledgers as $ledger) {
+            $ledgerId = intval($ledger['local_ledger_id']);
+            $ledgerMap[$ledgerId] = $ledger;
+            
+            // Thu thập parent IDs để query một lần
+            $parentId = isset($ledger['local_ledger_parent_id']) ? intval($ledger['local_ledger_parent_id']) : null;
+            if ($parentId && $parentId > 0) {
+                $parentIds[] = $parentId;
+            }
+        }
+        
+        // Query tất cả parent một lần để tối ưu
+        $parentMap = [];
+        if (!empty($parentIds)) {
+            $parentIds = array_unique($parentIds);
+            $placeholders = implode(',', array_fill(0, count($parentIds), '%d'));
+            $parentResults = $wpdb->get_results($wpdb->prepare(
+                "SELECT local_ledger_id, local_ledger_type FROM " . TGS_TABLE_LOCAL_LEDGER . " WHERE local_ledger_id IN ({$placeholders})",
+                ...$parentIds
+            ), ARRAY_A);
+            
+            foreach ($parentResults as $parent) {
+                $parentMap[intval($parent['local_ledger_id'])] = intval($parent['local_ledger_type']);
+            }
+        }
+
         $roll_up_data = [];
 
-        // Lặp trực tiếp qua từng item, không cần map qua ledgers
-        // vì items thuộc về child ledgers, không phải parent ledgers
+        // Lặp trực tiếp qua từng item
         foreach ($items as $item) {
             $product_id = $item['local_product_name_id'];
-            // Type cố định là 10 (SALES) cho product roll-up
-            $ledger_type = $item['local_ledger_item_type'] == TGS_LEDGER_TYPE_IMPORT_ROLL_UP ? TGS_LEDGER_TYPE_RETURN_ROLL_UP : TGS_LEDGER_TYPE_SALES_ROLL_UP;
+            $child_ledger_id = intval($item['local_ledger_id']);
+            $child_ledger = $ledgerMap[$child_ledger_id] ?? null;
+            
+            if (!$child_ledger) {
+                continue;
+            }
+            
+            $child_type = intval($child_ledger['local_ledger_type']);
+            $parent_id = isset($child_ledger['local_ledger_parent_id']) ? intval($child_ledger['local_ledger_parent_id']) : null;
+            
+            // Xác định roll-up type dựa vào parent type:
+            // - Type 1 (nhập) từ parent type 9 (mua) → PURCHASE_ROLL_UP (9)
+            // - Type 1 (nhập) từ parent type 11 (hoàn) → RETURN_ROLL_UP (11)
+            // - Type 2 (xuất) từ parent type 10 (bán) → SALES_ROLL_UP (10)
+            $ledger_type = null;
+            
+            if ($parent_id && isset($parentMap[$parent_id])) {
+                $parent_type = $parentMap[$parent_id];
+                
+                if ($child_type == 1) {
+                    // Nhập kho
+                    if ($parent_type == 9) {
+                        $ledger_type = TGS_LEDGER_TYPE_PURCHASE_ROLL_UP; // 9 - Mua hàng
+                    } elseif ($parent_type == 11) {
+                        $ledger_type = TGS_LEDGER_TYPE_RETURN_ROLL_UP; // 11 - Hoàn trả
+                    }
+                } elseif ($child_type == 2) {
+                    // Xuất kho
+                    if ($parent_type == 10) {
+                        $ledger_type = TGS_LEDGER_TYPE_SALES_ROLL_UP; // 10 - Bán hàng
+                    }
+                }
+            }
+            
+            // Nếu không xác định được type, bỏ qua
+            if (!$ledger_type) {
+                continue;
+            }
+            
             $source = isset($item['local_ledger_source']) ? intval($item['local_ledger_source']) : 0;
             $key = $product_id . '_' . $ledger_type . '_' . $source;
 
@@ -182,6 +249,9 @@ class CalculateDailyProductRollup
 
     /**
      * Lấy danh sách types cần xử lý
+     * 
+     * Logic: Lấy type 1, 2 (nhập/xuất kho - child ledgers) đã approve
+     * Sau đó xác định parent type để phân loại roll-up type
      *
      * @param int|null $syncType
      * @return array
@@ -193,8 +263,8 @@ class CalculateDailyProductRollup
         }
 
         return [
-            TGS_LEDGER_TYPE_SALES_ROLL_UP,     // 10 - Bán hàng (dùng cho dashboard & order)
-            11,    // 11 - Hoàn trả (dùng cho dashboard)
+            TGS_LEDGER_TYPE_IMPORT_ROLL_UP,  // 1 - Nhập kho (từ mua hàng hoặc hoàn trả)
+            TGS_LEDGER_TYPE_EXPORT_ROLL_UP,  // 2 - Xuất kho (từ bán hàng)
         ];
     }
 }
