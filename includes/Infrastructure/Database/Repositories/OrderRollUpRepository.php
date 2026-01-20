@@ -44,6 +44,7 @@ class OrderRollUpRepository
             'roll_up_date' => $data['roll_up_date'] ?? current_time('Y-m-d'),
             'count' => $data['count'] ?? 0,
             'value' => $data['value'] ?? 0,
+            'source' => $data['source'] ?? 0,
             'created_at' => current_time('mysql'),
             'updated_at' => current_time('mysql'),
         ];
@@ -64,9 +65,11 @@ class OrderRollUpRepository
             ? "count = VALUES(count),
                value = VALUES(value),
                meta = VALUES(meta),
+               source = VALUES(source),
                updated_at = VALUES(updated_at)"
             : "count = count + VALUES(count),
                value = value + VALUES(value),
+               meta = JSON_MERGE_PRESERVE(COALESCE(meta, '{}'), VALUES(meta)),
                updated_at = VALUES(updated_at)";
 
         // Build query

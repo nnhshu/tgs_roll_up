@@ -113,6 +113,7 @@ class SyncOrderToParentShop
                     'roll_up_day' => $record['roll_up_day'],  // Giữ nguyên roll_up_day (có thể là 0 hoặc ngày cụ thể)
                     'count' => $record['count'],
                     'value' => $record['value'],
+                    'source' => $record['source'] ?? 0,
                 ];
 
                 // Sync meta

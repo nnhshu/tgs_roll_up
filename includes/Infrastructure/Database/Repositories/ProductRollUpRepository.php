@@ -89,6 +89,8 @@ class ProductRollUpRepository implements RollUpRepositoryInterface
             ? "amount_after_tax = VALUES(amount_after_tax),
                tax = VALUES(tax),
                quantity = VALUES(quantity),
+               type = VALUES(type),
+               source = VALUES(source),
                meta = VALUES(meta),
                updated_at = VALUES(updated_at)"
             : "amount_after_tax = amount_after_tax + VALUES(amount_after_tax),

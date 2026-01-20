@@ -51,9 +51,10 @@ class AccountingRollUpRepository
      * Save accounting record
      *
      * @param array $data Accounting data
+     * @param bool $overwrite Whether to overwrite or add to existing
      * @return int Record ID
      */
-    public function save(array $data): int
+    public function save(array $data, bool $overwrite = false): int
     {
         $this->ensureTableExists();
         $table = $this->wpdb->prefix . 'accounting_roll_up';
@@ -79,10 +80,16 @@ class AccountingRollUpRepository
             $insert_data['meta'] = is_string($data['meta']) ? $data['meta'] : json_encode($data['meta']);
         }
 
-        // ON DUPLICATE KEY UPDATE - cộng dồn
-        $on_duplicate = "total_income = total_income + VALUES(total_income),
-                         total_expense = total_expense + VALUES(total_expense),
-                         updated_at = VALUES(updated_at)";
+        // ON DUPLICATE KEY UPDATE
+        $on_duplicate = $overwrite
+            ? "total_income = VALUES(total_income),
+               total_expense = VALUES(total_expense),
+               meta = VALUES(meta),
+               updated_at = VALUES(updated_at)"
+            : "total_income = total_income + VALUES(total_income),
+               total_expense = total_expense + VALUES(total_expense),
+               meta = JSON_MERGE_PRESERVE(COALESCE(meta, '{}'), VALUES(meta)),
+               updated_at = VALUES(updated_at)";
 
         // Build query
         $fields = array_keys($insert_data);

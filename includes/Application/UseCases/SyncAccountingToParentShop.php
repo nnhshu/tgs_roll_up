@@ -100,13 +100,14 @@ class SyncAccountingToParentShop
         foreach ($sourceRecords as $record) {
             $synced = $this->blogContext->executeInBlog($parentBlogId, function() use ($record) {
                 // Lưu record vào parent với blog_id gốc (của shop con)
+                // overwrite = true để ghi đè thay vì cộng dồn
                 return $this->accountingRepo->save([
                     'blog_id' => $record['blog_id'], // Giữ nguyên blog_id của shop con
                     'roll_up_date' => $record['roll_up_date'],
                     'total_income' => $record['total_income'],
                     'total_expense' => $record['total_expense'],
                     'meta' => $record['meta'],
-                ]);
+                ], true); // overwrite = true để ghi đè
             });
 
             if ($synced) {
@@ -178,13 +179,14 @@ class SyncAccountingToParentShop
         foreach ($sourceRecords as $record) {
             $synced = $this->blogContext->executeInBlog($parentBlogId, function() use ($record) {
                 // Lưu record vào parent với blog_id gốc (của shop con)
+                // overwrite = true để ghi đè thay vì cộng dồn
                 return $this->accountingRepo->save([
                     'blog_id' => $record['blog_id'], // Giữ nguyên blog_id của shop con
                     'roll_up_date' => $record['roll_up_date'],
                     'total_income' => $record['total_income'],
                     'total_expense' => $record['total_expense'],
                     'meta' => $record['meta'],
-                ]);
+                ], true); // overwrite = true để ghi đè
             });
 
             if ($synced) {

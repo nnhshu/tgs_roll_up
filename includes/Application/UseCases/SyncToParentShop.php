@@ -109,13 +109,19 @@ class SyncToParentShop
                     'tax' => $record['tax'],
                     'quantity' => $record['quantity'],
                     'type' => $record['type'],
+                    'source' => $record['source'] ?? 0,
                 ];
 
-                // Sync meta (lot_ids)
+                // Sync toàn bộ meta (lot_ids và ledger_ids)
                 if (!empty($record['meta'])) {
                     $metaData = json_decode($record['meta'], true);
-                    if (is_array($metaData) && isset($metaData['lot_ids'])) {
-                        $parentData['lot_ids'] = $metaData['lot_ids'];
+                    if (is_array($metaData)) {
+                        if (isset($metaData['lot_ids'])) {
+                            $parentData['lot_ids'] = $metaData['lot_ids'];
+                        }
+                        if (isset($metaData['ledger_ids'])) {
+                            $parentData['ledger_ids'] = $metaData['ledger_ids'];
+                        }
                     }
                 }
 
