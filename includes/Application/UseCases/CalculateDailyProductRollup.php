@@ -113,7 +113,6 @@ class CalculateDailyProductRollup
             // Type cố định là 10 (SALES) cho product roll-up
             $ledger_type = $item['local_ledger_item_type'] == TGS_LEDGER_TYPE_IMPORT_ROLL_UP ? TGS_LEDGER_TYPE_RETURN_ROLL_UP : TGS_LEDGER_TYPE_SALES_ROLL_UP;
             $source = isset($item['local_ledger_source']) ? intval($item['local_ledger_source']) : 0;
-            error_log("Processing item for product_id: {$product_id}, ledger_type: {$ledger_type}, source: {$source}");
             $key = $product_id . '_' . $ledger_type . '_' . $source;
 
             if (!isset($roll_up_data[$key])) {
