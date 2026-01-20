@@ -48,6 +48,11 @@ class TgsShopDataSource implements DataSourceInterface
 
     /**
      * {@inheritdoc}
+     * 
+     * Logic mới:
+     * - Lấy ledger với updated_at = date (thời gian approve)
+     * - Với type 1, 2: Cần check parent đã approve
+     * - Với type 6, 7, 8: Chỉ cần status = 4, không cần check parent
      */
     public function getLedgers(string $date, array $types = [], bool $processedOnly = false): array
     {
@@ -56,7 +61,13 @@ class TgsShopDataSource implements DataSourceInterface
         }
 
         $table = TGS_TABLE_LOCAL_LEDGER;
-        $where = ["DATE(created_at) = %s"];
+        
+        // Base conditions: updated_at = date (thời gian approve), status = 4
+        $where = [
+            "DATE(updated_at) = %s",  // Thời gian approve = ngày hôm nay
+            "local_ledger_status = 4", // Đã approve
+            "(is_deleted IS NULL OR is_deleted = 0)"
+        ];
         $params = [$date];
 
         if (!empty($types)) {
@@ -68,18 +79,50 @@ class TgsShopDataSource implements DataSourceInterface
         if ($processedOnly) {
             $where[] = "(is_croned IS NULL OR is_croned = 0)";
         }
-
-        // Thêm điều kiện: is_croned = 0 và local_ledger_status = 4
+        
         $where[] = "(is_croned IS NULL OR is_croned = 0)";
-        $where[] = "local_ledger_status = 4";
 
-        $where_clause = implode(' AND ', $where);
-        $query = "SELECT * FROM {$table} WHERE {$where_clause} ORDER BY local_ledger_id ASC";
-
-        return $this->wpdb->get_results(
+        $whereClause = implode(' AND ', $where);
+        
+        // Lấy tất cả ledger con (type 1, 2, 6, 7, 8) đã approve
+        $query = "SELECT * FROM {$table} WHERE {$whereClause} ORDER BY local_ledger_id ASC";
+        
+        $childLedgers = $this->wpdb->get_results(
             $this->wpdb->prepare($query, ...$params),
             ARRAY_A
         ) ?: [];
+        
+        // Phân loại: Type cần check parent (1, 2) và type không cần check (6, 7, 8)
+        $typesNeedParentCheck = [1, 2]; // Nhập kho, Xuất kho
+        $resultLedgers = [];
+        
+        foreach ($childLedgers as $child) {
+            $childType = intval($child['local_ledger_type']);
+            $parentId = isset($child['local_ledger_parent_id']) ? intval($child['local_ledger_parent_id']) : null;
+            
+            // Type 6, 7, 8: Không cần check parent, lấy trực tiếp
+            if (!in_array($childType, $typesNeedParentCheck) || $parentId === null || $parentId === 0) {
+                $resultLedgers[] = $child;
+                continue;
+            }
+            
+            // Type 1, 2: Kiểm tra parent đã approve chưa
+            $parent = $this->wpdb->get_row($this->wpdb->prepare(
+                "SELECT local_ledger_type, local_ledger_status 
+                 FROM {$table} 
+                 WHERE local_ledger_id = %d 
+                 AND local_ledger_status = 4
+                 AND (is_deleted IS NULL OR is_deleted = 0)",
+                $parentId
+            ), ARRAY_A);
+            
+            // Chỉ lấy nếu parent đã approve
+            if ($parent && intval($parent['local_ledger_status']) === 4) {
+                $resultLedgers[] = $child;
+            }
+        }
+        
+        return $resultLedgers;
     }
 
     /**
@@ -212,6 +255,8 @@ class TgsShopDataSource implements DataSourceInterface
 
     /**
      * Get orders (ledger type = 10 SALES)
+     * 
+     * Logic mới: Lấy parent (type 10) từ phiếu con (type 2 - xuất kho) đã approve hôm nay
      *
      * @param string $date Date (Y-m-d)
      * @return array Orders
@@ -224,13 +269,20 @@ class TgsShopDataSource implements DataSourceInterface
 
         $table = TGS_TABLE_LOCAL_LEDGER;
 
-        $query = "SELECT *
-                  FROM {$table}
-                  WHERE DATE(created_at) = %s
-                  AND local_ledger_type = 10
-                  AND (is_deleted IS NULL OR is_deleted = 0)
-                  AND (is_croned IS NULL OR is_croned = 0)
-                  ORDER BY local_ledger_id ASC";
+        // Lấy phiếu bán (type 10) từ phiếu con (type 2 - xuất kho) đã approve hôm nay
+        $query = "SELECT DISTINCT p.*
+                  FROM {$table} c
+                  INNER JOIN {$table} p ON c.local_ledger_parent_id = p.local_ledger_id
+                  WHERE DATE(c.updated_at) = %s
+                  AND c.local_ledger_type = 2
+                  AND c.local_ledger_status = 4
+                  AND p.local_ledger_type = 10
+                  AND p.local_ledger_status = 4
+                  AND (c.is_deleted IS NULL OR c.is_deleted = 0)
+                  AND (p.is_deleted IS NULL OR p.is_deleted = 0)
+                  AND (c.is_croned IS NULL OR c.is_croned = 0)
+                  AND (p.is_croned IS NULL OR p.is_croned = 0)
+                  ORDER BY p.local_ledger_id ASC";
 
         return $this->wpdb->get_results(
             $this->wpdb->prepare($query, $date),
